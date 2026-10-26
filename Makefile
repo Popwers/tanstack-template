@@ -7,7 +7,7 @@ export PATH := $(CURDIR)/node_modules/.bin:$(PATH)
 
 IMAGE := $(notdir $(CURDIR))
 
-.PHONY: help init install hooks check fix dev build start test e2e verify conformity \
+.PHONY: help init install hooks check fix dev build start test e2e verify conformity conformity-sync \
 	up down reset logs db-generate db-migrate db-studio image image-run backup-image clean
 
 help: ## Show available targets
@@ -58,8 +58,12 @@ verify: ## Full gate: conformity + check + tests + build
 	@vp test run
 	@vp run build
 
-conformity: ## Check this repo against the MyStudio standard (DIR=<path> for another repo)
-	@bun scripts/conformity.ts $(DIR)
+conformity: ## Check this repo against the standard (vendored copy of the dotfiles `stack-conformity`)
+	@bun scripts/conformity.ts
+
+conformity-sync: ## Refresh scripts/conformity.ts from the `stack-conformity` installed by the dotfiles
+	@src="$$(command -v stack-conformity)"; test -n "$$src" || (echo "stack-conformity not on PATH (dotfiles setup_my_mac.sh)" && exit 1); \
+		cp "$$src" scripts/conformity.ts && echo "scripts/conformity.ts <- $$src"
 
 up: ## Start Postgres + Mailpit
 	@docker compose up -d --wait

@@ -21,7 +21,8 @@ Then:
 2. Add product tables to `src/lib/db/schema.ts`, then `make db-generate NAME=<slug>`.
 3. Provision the infrastructure with `/provision-project <name>` (Postgres role + db, R2 buckets,
    Cloudflare zone, Coolify app + backup), then follow [DEPLOY.md](DEPLOY.md).
-4. `make conformity` before production. CI runs it on every push.
+4. `make conformity` before production. CI runs it on every push. For any other repo, use
+   `stack-conformity <dir>` from the dotfiles.
 
 ## Commands
 
@@ -33,7 +34,8 @@ Then:
 | `make test` | Vitest (`vp test`) |
 | `make e2e` | Golden paths against the production build, throwaway Postgres on :5439 |
 | `make verify` | Conformity + check + tests + build |
-| `make conformity [DIR=../repo]` | Check a repo against the standard (read-only) |
+| `make conformity` | Check this repo against the standard (read-only; CI runs it too) |
+| `make conformity-sync` | Refresh the vendored checker from `stack-conformity` (dotfiles) |
 | `make image` / `make image-run` | Build / run the production image against the dev database on :3002 |
 | `make backup-image` | Build the backup service image |
 | `make db-generate NAME=…` / `make db-migrate` / `make db-studio` | Drizzle |
@@ -53,7 +55,7 @@ src/
   lib/server/email.ts     Resend → Mailpit → storage/_outbox
   content/legal/          SITE, PUBLISHER (SAS MYSTUDIO.DIGITAL), HOSTING (Hetzner), legal texts
 scripts/migrate.ts        migrations, bundled and run by docker-entrypoint.sh at every boot
-scripts/conformity.ts     the standard as an executable check
+scripts/conformity.ts     vendored copy of `stack-conformity` (Popwers/dotfiles), so CI runs it without the dotfiles
 backup/                   second Coolify app: pg_dump + uploads → R2 backups bucket
 tests/                    *.test.ts (Vitest), e2e/*.e2e.ts (e2e)
 tools/oxlint/anti-slop/   vendored lint plugin
