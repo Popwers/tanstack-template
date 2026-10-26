@@ -536,21 +536,30 @@ const NO_SQLITE_CHECK: Check = {
 	},
 };
 
-/** Public sites name their host in the legal notice, from one `export const HOSTING`. */
+/** A host's legal name, as the LCEN notice must give it. */
+const HOST_LEGAL_NAME =
+	/Hetzner Online(?: GmbH)?|OVH(?:cloud)? SAS|Scaleway SAS|Cloudflare,? Inc|Vercel,? Inc|Netlify,? Inc|o2switch/;
+
+/**
+ * Public sites name their host in the legal notice: either one `export const HOSTING`,
+ * or the host's legal name written inline in the app sources (Zailes, Tête Anlèr).
+ */
 const LEGAL_HOSTING_CHECK: Check = {
 	name: 'legal HOSTING',
 	run: (context) => {
 		const hosting = context.sources
 			.map(({ text }) => /export\s+const\s+HOSTING\s*=\s*(['"`])([\s\S]*?)\1/.exec(text)?.[2]?.trim())
 			.find((value) => value !== undefined);
-		const isSet = hosting !== undefined && hosting.length > 0 && !/TODO|TBD|xxx/i.test(hosting);
-		const hint = context.sources.some(({ text }) => /Hetzner/.test(text))
-			? ' (legal text names Hetzner inline: move it to HOSTING)'
-			: '';
+		if (hosting !== undefined && hosting.length > 0 && !/TODO|TBD|xxx/i.test(hosting)) {
+			return result('legal HOSTING', true, hosting.slice(0, 40));
+		}
+		const inline = context.sources.find(({ text }) => HOST_LEGAL_NAME.test(text));
 		return result(
 			'legal HOSTING',
-			isSet,
-			isSet ? hosting.slice(0, 40) : `no non-empty \`export const HOSTING\`${hint}`,
+			inline !== undefined,
+			inline === undefined
+				? 'no `export const HOSTING` and no host legal name (e.g. Hetzner Online GmbH) in the sources'
+				: `${HOST_LEGAL_NAME.exec(inline.text)?.[0]} in ${path.relative(context.root, inline.file)}`,
 		);
 	},
 };
@@ -631,7 +640,7 @@ const PROFILES: StackProfile[] = [
 			'health endpoint (src/pages/api/health.ts or the adapter route) wired to the Docker HEALTHCHECK',
 			'`make dev` / `make build` call `vp run dev|build` (never `vp dev` on Astro)',
 			'Sentry via sentry.{client,server}.config.*; Turnstile on public forms',
-			'legal pages read HOSTING (Hetzner) from one constant',
+			'legal pages name the host (HOSTING constant or its legal name inline)',
 			'if it talks to Strapi: STRAPI_URL / STRAPI_TOKEN validated at boot',
 		],
 	},
