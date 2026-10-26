@@ -1,0 +1,27 @@
+node_modules
+.output
+.tanstack
+.nitro
+dist
+dist-scripts
+.cache
+coverage
+
+# env
+.env
+.env.*
+!.env.example
+
+# uploads + e-mail outbox (disk fallback)
+storage
+
+# tooling
+.claude
+.serena/
+.grepai/
+tsconfig.tsbuildinfo
+*.log
+.DS_Store
+
+# e2e
+.e2e/

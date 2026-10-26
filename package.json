@@ -1,0 +1,112 @@
+{
+  "name": "tanstack-template",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#/*": "./src/*"
+  },
+  "scripts": {
+    "prepare": "vp config --no-agent || true",
+    "dev": "bun --bun vp dev --port 3000",
+    "build": "bun --bun vp build",
+    "preview": "vp preview",
+    "start": "bun .output/server/index.mjs",
+    "check": "bun --bun vp check",
+    "test": "vp test run",
+    "test:e2e": "e2e run",
+    "test:e2e:ci": "e2e run --exclude-tag agent --reporter list,junit",
+    "db:generate": "bun --bun drizzle-kit generate",
+    "db:migrate": "bun scripts/migrate.ts",
+    "db:studio": "bun --bun drizzle-kit studio",
+    "conformity": "bun scripts/conformity.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1156.0",
+    "@fontsource-variable/inter": "5.3.0",
+    "@marsidev/react-turnstile": "1.6.3",
+    "@openpanel/sdk": "^1.3.2",
+    "@sentry/tanstackstart-react": "^11.9.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@tanstack/react-router": "1.170.46",
+    "@tanstack/react-start": "1.169.4",
+    "@tanstack/router-plugin": "1.168.48",
+    "better-auth": "1.7.13",
+    "class-variance-authority": "0.7.1",
+    "cn": "^0.5.0",
+    "drizzle-orm": "0.45.4",
+    "lucide-react": "1.61.0",
+    "nitro": "npm:nitro-nightly@3.0.260903-beta",
+    "postgres": "3.4.9",
+    "radix-ui": "^1.8.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "resend": "^6.34.1",
+    "tailwindcss": "4.3.3",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@ai-sdk/xai": "^5.0.30",
+    "@e2e-dev/web": "^0.15.3",
+    "@semantic-release/changelog": "^7.0.0",
+    "@semantic-release/git": "^11.0.1",
+    "@semantic-release/npm": "^13.2.0",
+    "@sentry/vite-plugin": "^11.9.0",
+    "@shadcn/lint": "^0.2.3",
+    "@types/bun": "1.4.4",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "drizzle-kit": "0.31.11",
+    "e2e": "^0.21.3",
+    "semantic-release": "^25.0.9",
+    "tw-animate-css": "1.4.0",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
+    "vite-plus": "1.4.0",
+    "vitest": "5.0.5"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
+    "vitest": "5.0.5"
+  },
+  "packageManager": "bun@1.4.4",
+  "release": {
+    "branches": [
+      "main"
+    ],
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/release-notes-generator",
+      [
+        "@semantic-release/changelog",
+        {
+          "changelogFile": "CHANGELOG.md"
+        }
+      ],
+      [
+        "@semantic-release/npm",
+        {
+          "npmPublish": false
+        }
+      ],
+      [
+        "@semantic-release/git",
+        {
+          "assets": [
+            "CHANGELOG.md",
+            "package.json"
+          ],
+          "message": "chore(release): ${nextRelease.version} [skip ci]"
+        }
+      ],
+      [
+        "@semantic-release/github",
+        {
+          "successComment": false,
+          "releaseBodyTemplate": "<%= nextRelease.notes %>"
+        }
+      ]
+    ]
+  }
+}
