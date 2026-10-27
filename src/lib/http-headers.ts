@@ -17,13 +17,47 @@ export const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 /** Better Auth's session cookie (`__Secure-` prefixed over https), the one the Cloudflare rule bypasses on. */
 const SESSION_COOKIE = 'better-auth.session_token';
 
-/** Headers every response carries. CSP is left to the product (Turnstile and OpenPanel need entries). */
+/** Headers every response carries; the per-request CSP comes from {@link contentSecurityPolicy}. */
 export const SECURITY_HEADERS: ReadonlyArray<[string, string]> = [
 	['X-Content-Type-Options', 'nosniff'],
 	['Referrer-Policy', 'strict-origin-when-cross-origin'],
 	['X-Frame-Options', 'DENY'],
 	['Permissions-Policy', 'camera=(), microphone=(), geolocation=()'],
 ];
+
+/** Turnstile's script and iframe origin. */
+const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com';
+
+/** What one response's CSP allows beyond the app's own origin. */
+export interface CspSources {
+	/** Fresh per response; TanStack sets it on every script it renders (router `ssr.nonce`). */
+	nonce: string;
+	/** Origins the browser posts to: the OpenPanel ingest, the Sentry DSN host. */
+	connectOrigins: readonly string[];
+}
+
+/**
+ * Content-Security-Policy of one response. Scripts run only with the nonce; `'strict-dynamic'` lets
+ * those scripts load the rest (Vite chunks, Turnstile's api.js). Inline styles stay allowed: React
+ * `style` props and Turnstile's widget set them.
+ * @param sources - The response's nonce and the extra origins the browser calls.
+ * @returns The header value.
+ */
+export function contentSecurityPolicy({ nonce, connectOrigins }: CspSources): string {
+	return [
+		"default-src 'self'",
+		`script-src 'self' 'nonce-${nonce}' 'strict-dynamic' ${TURNSTILE_ORIGIN}`,
+		"style-src 'self' 'unsafe-inline'",
+		"img-src 'self' data: blob:",
+		"font-src 'self'",
+		["connect-src 'self'", ...connectOrigins].join(' '),
+		`frame-src ${TURNSTILE_ORIGIN}`,
+		"frame-ancestors 'none'",
+		"base-uri 'self'",
+		"form-action 'self'",
+		"object-src 'none'",
+	].join('; ');
+}
 
 /** One response as the policy sees it. */
 export interface ResponsePolicyInput {

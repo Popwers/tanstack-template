@@ -8,3 +8,10 @@ const csrfMiddleware = createCsrfMiddleware({
 export const startInstance = createStart(() => ({
 	requestMiddleware: [csrfMiddleware],
 }));
+
+declare module '@tanstack/react-start' {
+	interface Register {
+		/** Set per request by `src/server.ts`; the router renders its scripts with it. */
+		server: { requestContext: { cspNonce: string } };
+	}
+}

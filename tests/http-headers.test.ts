@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test';
 
 import {
 	cacheHeaders,
+	contentSecurityPolicy,
 	IMMUTABLE_CACHE_CONTROL,
 	PRIVATE_CACHE_CONTROL,
 	PUBLIC_PAGE_CACHE_CONTROL,
@@ -17,7 +18,9 @@ import { robotsTxt, sitemapXml } from '#/lib/seo';
  * - an app page gets CDN-Cache-Control at all, or a public page never gets it;
  * - a 404 under /assets/ is marked immutable;
  * - a route's own cache choice (robots.txt, sitemap.xml) is overwritten;
- * - the sitemap lists an app page, or robots.txt leaves the app open or omits the sitemap.
+ * - the sitemap lists an app page, or robots.txt leaves the app open or omits the sitemap;
+ * - the CSP lets an inline script run without the nonce, blocks Turnstile's script or iframe, drops
+ *   an analytics or Sentry origin, or lets another site frame the app.
  */
 
 const PRIVATE = { cacheControl: PRIVATE_CACHE_CONTROL, cdn: null };
@@ -77,6 +80,45 @@ describe('cacheHeaders', () => {
 		expect(cacheHeaders(page({ pathname: '/api/health', contentType: 'application/json' }))).toEqual(
 			PRIVATE,
 		);
+	});
+});
+
+describe('contentSecurityPolicy', () => {
+	const directives = (policy: string): Map<string, string[]> =>
+		new Map(
+			policy.split('; ').map((directive) => {
+				const [name = '', ...values] = directive.split(' ');
+				return [name, values];
+			}),
+		);
+	const policy = directives(
+		contentSecurityPolicy({ nonce: 'abc123', connectOrigins: ['https://o.example.com'] }),
+	);
+
+	it('runs scripts by nonce only, never inline or eval', () => {
+		expect(policy.get('script-src')).toContain("'nonce-abc123'");
+		expect(policy.get('script-src')).toContain("'strict-dynamic'");
+		expect(policy.get('script-src')).not.toContain("'unsafe-inline'");
+		expect(policy.get('script-src')).not.toContain("'unsafe-eval'");
+	});
+
+	it('allows the Turnstile script and iframe', () => {
+		expect(policy.get('script-src')).toContain('https://challenges.cloudflare.com');
+		expect(policy.get('frame-src')).toEqual(['https://challenges.cloudflare.com']);
+	});
+
+	it('lets the browser post to the given origins and to its own', () => {
+		expect(policy.get('connect-src')).toEqual(["'self'", 'https://o.example.com']);
+		expect(
+			directives(contentSecurityPolicy({ nonce: 'n', connectOrigins: [] })).get('connect-src'),
+		).toEqual(["'self'"]);
+	});
+
+	it('refuses framing, plugins and foreign form targets', () => {
+		expect(policy.get('frame-ancestors')).toEqual(["'none'"]);
+		expect(policy.get('object-src')).toEqual(["'none'"]);
+		expect(policy.get('form-action')).toEqual(["'self'"]);
+		expect(policy.get('base-uri')).toEqual(["'self'"]);
 	});
 });
 

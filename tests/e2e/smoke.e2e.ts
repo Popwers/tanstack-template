@@ -98,3 +98,17 @@ test('a public page is edge-cacheable and shareable, an app page is private', as
 	expect(signIn.headers.get('cache-control')).toBe('private, no-store');
 	expect(await signIn.text()).not.toContain('rel="canonical"');
 });
+
+test('every page gets its own CSP nonce, carried by each of its scripts', async () => {
+	const nonceOf = (policy: string | null) => /'nonce-([^']+)'/.exec(policy ?? '')?.[1];
+	const first = await fetch(`${E2E_BASE_URL}/sign-in`);
+	const nonce = nonceOf(first.headers.get('content-security-policy'));
+	expect(nonce).toBeDefined();
+	const html = await first.text();
+	const scripts = [...html.matchAll(/<script\b[^>]*>/g)].map(([tag]) => tag);
+	expect(scripts.length).toBeGreaterThan(0);
+	for (const tag of scripts) expect(tag).toContain(`nonce="${nonce}"`);
+
+	const second = await fetch(`${E2E_BASE_URL}/sign-in`);
+	expect(nonceOf(second.headers.get('content-security-policy'))).not.toBe(nonce);
+});
