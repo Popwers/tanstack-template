@@ -4,7 +4,7 @@
 #   <prefix>db-<ts>.dump
 #   <prefix>uploads-<ts>.tar.gz
 # The prefix (BACKUP_KEY_PREFIX) lets one R2 lifecycle rule expire only the backups
-# (e.g. expire objects under `backup-` after 30 days) without touching app files.
+# (objects under `backup-` expire after 3 days, DEPLOY.md §4) without touching app files.
 #
 # Expected variables:
 #   POSTGRES_HOST, POSTGRES_PORT (default 5432), POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB

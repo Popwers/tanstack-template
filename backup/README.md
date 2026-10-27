@@ -7,7 +7,7 @@ Second Coolify app (same repo, base directory `backup/`). Runs `backup.sh` on `B
 2. the uploads (R2 bucket `UPLOADS_BUCKET`, or the disk volume `UPLOADS_DIR`) → `<prefix>uploads-<ts>.tar.gz`
 
 Both go to the **backups** bucket `CF_BUCKET` (`<name>-backups`, EU jurisdiction), never to the files
-bucket. Expire them with an R2 lifecycle rule on the prefix.
+bucket. An R2 lifecycle rule on the prefix expires them after 3 days (DEPLOY.md §4).
 
 | Variable | Value |
 | --- | --- |

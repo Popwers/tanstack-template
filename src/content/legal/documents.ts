@@ -49,7 +49,7 @@ export const MENTIONS_LEGALES: LegalDocument = {
 
 export const CONFIDENTIALITE: LegalDocument = {
 	title: 'Politique de confidentialité',
-	updatedAt: '2026-10-26',
+	updatedAt: '2026-10-27',
 	sections: [
 		{
 			heading: 'Responsable du traitement',
@@ -70,12 +70,14 @@ export const CONFIDENTIALITE: LegalDocument = {
 				`Hébergement : ${HOSTING}.`,
 				`Stockage des fichiers : ${FILE_STORAGE}.`,
 				'Envoi des e-mails : Resend, Inc. (États-Unis), encadré par les clauses contractuelles types.',
+				'Vérification anti-robot : Cloudflare, Inc. (États-Unis), encadré par les clauses contractuelles types.',
+				'Suivi des erreurs : Functional Software, Inc. (Sentry, États-Unis), encadré par les clauses contractuelles types.',
 			],
 		},
 		{
 			heading: 'Durées de conservation',
 			body: [
-				'Les données du compte sont conservées tant que le compte est actif, puis supprimées. Les sauvegardes chiffrées sont conservées 30 jours.',
+				'Les données du compte sont conservées tant que le compte est actif, puis supprimées. Les sauvegardes, chiffrées au repos, sont conservées 3 jours puis effacées automatiquement.',
 			],
 		},
 		{

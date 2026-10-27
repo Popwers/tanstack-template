@@ -1,9 +1,12 @@
 # Déploiement (Coolify, Hetzner)
 
-Deux applications Coolify sur le serveur principal (`worker-server-2`, `49.13.58.160`) : l'app et son
-service de backup. Base sur le Postgres partagé de Le Niid (`10.0.0.3:5432`, réseau privé). Fichiers et
-backups sur R2 (juridiction UE). Domaine sur Cloudflare. `/provision-project <name>` crée tout ça ;
-ce document décrit le résultat attendu.
+Deux applications Coolify sur le serveur choisi pour le projet : l'app et son service de backup. Base
+sur le Postgres partagé, joint par le réseau privé uniquement. Fichiers et backups sur R2 (juridiction
+UE), dans deux buckets séparés. Domaine sur Cloudflare. `/provision-project <name>` crée tout ça ; ce
+document décrit le résultat attendu.
+
+Les hôtes ne sont jamais écrits ici : lisez-les en direct (`coolify server list`, `coolify database list`,
+`hcloud server list -o columns=name,ipv4,ipv6,private_net` pour l'adresse privée du Postgres).
 
 ## 1. Variables d'environnement
 
@@ -12,7 +15,7 @@ injecte chaque variable *Buildtime* en `ARG`) : en changer une demande un nouvea
 
 | Variable | Requis | Exemple / défaut | Rôle |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | oui | `postgres://<name>:••••@10.0.0.3:5432/<name>` | Base applicative |
+| `DATABASE_URL` | oui | `postgres://<name>:••••@<ip-privée-postgres>:5432/<name>` | Base applicative |
 | `DATABASE_POOL_MAX` | non | `10` | Connexions max |
 | `BETTER_AUTH_SECRET` | oui | `openssl rand -base64 32` | Signe la session. Le serveur refuse de démarrer sans |
 | `APP_URL` | oui | `https://<domaine>` | Origine publique, liens des e-mails |
@@ -50,7 +53,7 @@ jamais une base non migrée, et Coolify garde l'ancienne version en ligne.
 
 1. **New Resource → Application → Public/Private Git → Dockerfile**, branche `main`, Auto Deploy.
 2. **Port** `3000`. **Health check** `GET /api/health` (200 ok, 503 base injoignable). L'image a aussi
-   son `HEALTHCHECK`.
+   son `HEALTHCHECK`. Mémoire `512m`. Image poussée dans le registre privé.
 3. **Domaine** `https://<domaine>` (apex). Redirection `www` → apex côté Cloudflare.
 4. Variables du §1, puis **Deploy**. Logs attendus :
    `→ Applying database migrations… ✓ Migrations applied. → Starting server…`.
@@ -58,17 +61,21 @@ jamais une base non migrée, et Coolify garde l'ancienne version en ligne.
 
 ## 4. Backup
 
-Deuxième app Coolify, même dépôt, **Base Directory** `backup`, sans port ni domaine, watch path
-`backup/**`. Variables : voir [`backup/README.md`](backup/README.md) (`POSTGRES_*` discrets,
-`CF_BUCKET=<name>-backups`, `UPLOADS_BUCKET=<name>-files`). Lifecycle rule R2 sur le préfixe
-`backup-` (30 jours). Premier test : Execute command `/opt/backup/backup.sh`, puis vérifier l'objet
-dans le bucket.
+Deuxième app Coolify, même dépôt, **Base Directory** `/backup`, sans port ni domaine, watch path
+`backup/**`, health check de l'image (`pgrep -f supercronic`), mémoire `256m`. Variables : voir
+[`backup/README.md`](backup/README.md) (`POSTGRES_*` discrets, `CF_BUCKET=<name>-backups`,
+`UPLOADS_BUCKET=<name>-files`).
+
+Bucket `<name>-backups` : expiration **3 jours** sur le préfixe `backup-` seulement, abandon des
+uploads multipart après 7 jours, object lock de 2 jours. Rien n'expire sur `<name>-files`. La politique
+de confidentialité annonce ces 3 jours : gardez les deux alignés. Premier test : Execute command
+`/opt/backup/backup.sh`, puis vérifier l'objet dans le bucket.
 
 ## 5. Vérifier en production
 
 ```bash
 curl -fsS https://<domaine>/api/health
-curl -sI https://<domaine>/ | grep -i -E 'cf-cache-status|strict-transport|x-content-type'
+curl -sI https://<domaine>/ | grep -i -E 'cf-cache-status|strict-transport|x-content-type|content-security'
 ```
 
 Puis inscription → e-mail reçu → lien → `/dashboard`, et `stack-conformity .` vert sur `main`.
