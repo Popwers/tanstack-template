@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/Popwers/tanstack-template/compare/v1.0.1...v1.1.0) (2026-10-27)
+
+
+### Features
+
+* sitemap, sharing tags, edge cache headers and purge on deploy ([8b9274c](https://github.com/Popwers/tanstack-template/commit/8b9274c2e163040c4581ebfa96993dedb815aa9f))
+
 ## [1.0.1](https://github.com/Popwers/tanstack-template/compare/v1.0.0...v1.0.1) (2026-10-26)
 
 
