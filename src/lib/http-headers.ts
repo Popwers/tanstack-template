@@ -3,7 +3,10 @@
  * Pure, so the policy is tested without a server.
  */
 
-/** Pages the same for every anonymous visitor, which Cloudflare may keep (DEPLOY.md: cache rule). */
+/**
+ * Pages the same for every anonymous visitor, which Cloudflare may keep (DEPLOY.md: cache rule).
+ * The edge serves one CSP nonce to everyone for the TTL, so these pages must never render user input.
+ */
 export const PUBLIC_PAGES: readonly string[] = ['/', '/confidentialite', '/mentions-legales'];
 
 /** A shared cache keeps the page five minutes; browsers always revalidate. */
