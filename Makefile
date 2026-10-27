@@ -7,7 +7,7 @@ export PATH := $(CURDIR)/node_modules/.bin:$(PATH)
 
 IMAGE := $(notdir $(CURDIR))
 
-.PHONY: help init install hooks check fix dev build start test e2e verify conformity conformity-sync \
+.PHONY: help init install hooks check fix dev build start test e2e verify \
 	up down reset logs db-generate db-migrate db-studio image image-run backup-image clean
 
 help: ## Show available targets
@@ -27,7 +27,7 @@ install: ## Install dependencies and Git hooks
 
 hooks: ## (Re)install Git hooks (vp config)
 	@vp config >/dev/null
-	@echo "Hooks installed (.vite-hooks/ -> vp staged)"
+	@echo "Hooks installed (.vite-hooks/: pre-commit vp staged, pre-push verify + e2e)"
 
 check: ## lint + fmt + typecheck
 	@vp check
@@ -52,18 +52,10 @@ test: ## Vitest suite
 e2e: ## e2e golden paths (builds, throwaway Postgres on :5439, app on :3011)
 	@vp run test:e2e
 
-verify: ## Full gate: conformity + check + tests + build
-	@$(MAKE) conformity
+verify: ## Full gate: check + tests + build (the pre-push hook runs it)
 	@vp check
 	@vp test run
 	@vp run build
-
-conformity: ## Check this repo against the standard (vendored copy of the dotfiles `stack-conformity`)
-	@bun scripts/conformity.ts
-
-conformity-sync: ## Refresh scripts/conformity.ts from the `stack-conformity` installed by the dotfiles
-	@src="$$(command -v stack-conformity)"; test -n "$$src" || (echo "stack-conformity not on PATH (dotfiles setup_my_mac.sh)" && exit 1); \
-		cp "$$src" scripts/conformity.ts && echo "scripts/conformity.ts <- $$src"
 
 up: ## Start Postgres + Mailpit
 	@docker compose up -d --wait

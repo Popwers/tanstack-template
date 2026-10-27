@@ -6,8 +6,8 @@ comments English.
 ## Commands
 
 Type `make` (the Makefile puts `./node_modules/.bin` first, so the repo's Vite+ wins). `make init` once,
-`make dev` to work, `make verify` before pushing, `make e2e` for UI changes, `make conformity` before
-production. Never `npm`/`npx`; `vp add`, `vpx`.
+`make dev` to work, `make verify` (the pre-push hook runs it, then e2e), `make e2e` for UI changes, `stack-conformity .`
+(dotfiles) before production. Never `npm`/`npx`; `vp add`, `vpx`.
 
 ## Rules
 
@@ -21,7 +21,7 @@ production. Never `npm`/`npx`; `vp add`, `vpx`.
 - **Files**: `src/lib/server/storage.ts` only. Keys are validated; the bucket is private, serve files
   through a session-checked route.
 - **E-mail**: `sendEmail` in `src/lib/server/email.ts`; tests read `storage/e2e/_outbox`.
-- **Legal**: identity in `src/content/legal/site.ts`. Keep `HOSTING` accurate; conformity checks it.
+- **Legal**: identity in `src/content/legal/site.ts`. Keep `HOSTING` accurate; `stack-conformity` checks it.
 - **UI**: shadcn primitives in `src/components/ui` (add with `vpx shadcn@latest add`), `cn` from npm
   `cn`. Fix every `shadcn/*` and `anti-slop/*` lint error; never suppress.
 - **Tests**: e2e first (`tests/e2e/*.e2e.ts`, tag agent tests `agent`). Vitest only for logic e2e cannot

@@ -49,7 +49,7 @@ export default {
 	tests: 'tests/e2e/**/*.e2e.ts',
 	retries: 0,
 	trace: 'retain-on-failure',
-	// SuperGrok: sign in once with `bunx e2e login spacexai`. Tag agent tests `agent` (CI excludes them).
+	// SuperGrok: sign in once with `bunx e2e login spacexai`. Tag agent tests `agent` (the pre-push gate excludes them).
 	agents: {
 		default: {
 			model: grok('grok-4.7'),

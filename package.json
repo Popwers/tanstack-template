@@ -18,8 +18,7 @@
     "test:e2e:ci": "e2e run --exclude-tag agent --reporter list,junit",
     "db:generate": "bun --bun drizzle-kit generate",
     "db:migrate": "bun scripts/migrate.ts",
-    "db:studio": "bun --bun drizzle-kit studio",
-    "conformity": "bun scripts/conformity.ts"
+    "db:studio": "bun --bun drizzle-kit studio"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
