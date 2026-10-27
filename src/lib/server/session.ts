@@ -19,13 +19,14 @@ export const getSessionUser = createServerFn({ method: 'GET' }).handler(
 	},
 );
 
-/** Public browser config: the Turnstile site key and OpenPanel client id. */
+/** Public browser config: the canonical origin, the Turnstile site key and OpenPanel client id. */
 export const getPublicConfig = createServerFn({ method: 'GET' }).handler(async () => {
-	const [{ turnstileKeys }, { env }] = await Promise.all([
+	const [{ turnstileKeys }, { appOrigin, env }] = await Promise.all([
 		import('#/lib/server/turnstile'),
 		import('#/lib/server/env'),
 	]);
 	return {
+		appUrl: appOrigin(),
 		turnstileSiteKey: turnstileKeys().siteKey,
 		openpanelClientId: env().OPENPANEL_CLIENT_ID ?? null,
 		openpanelApiUrl: env().OPENPANEL_API_URL,

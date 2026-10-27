@@ -30,6 +30,12 @@ injecte chaque variable *Buildtime* en `ARG`) : en changer une demande un nouvea
 | `SENTRY_AUTH_TOKEN`, `SENTRY_PROJECT` | non, *build seulement* | | Upload des source maps (org `mystudiodigital`) |
 | `OPENPANEL_API_URL` | non | `https://o.mystudio.digital/api` | OpenPanel self-hosted |
 | `OPENPANEL_CLIENT_ID` | non | | Id client public du projet. Absent : pas d'analytics |
+| `CLOUDFLARE_ZONE_ID` | non | | Zone Cloudflare d'`APP_URL` |
+| `CLOUDFLARE_API_TOKEN` | non | | Token limité à *Zone › Cache Purge* sur cette zone. Avec la zone : chaque démarrage en prod purge les pages publiques, robots.txt et sitemap.xml une fois le nouveau conteneur en service. Absent : pas de purge |
+
+Cache Cloudflare : l'app envoie `CDN-Cache-Control` sur les pages publiques (`PUBLIC_PAGES` dans
+`src/lib/http-headers.ts`) pour un visiteur anonyme, et `private, no-store` partout ailleurs. La règle de
+cache de la zone liste ces mêmes chemins et exclut le cookie `better-auth.session_token`.
 
 Activez **Include Source Commit in Build** : `SOURCE_COMMIT` devient la release Sentry.
 
@@ -65,7 +71,7 @@ curl -fsS https://<domaine>/api/health
 curl -sI https://<domaine>/ | grep -i -E 'cf-cache-status|strict-transport|x-content-type'
 ```
 
-Puis inscription → e-mail reçu → lien → `/dashboard`, et `make conformity` vert sur `main`.
+Puis inscription → e-mail reçu → lien → `/dashboard`, et `stack-conformity .` vert sur `main`.
 
 ## 6. Tester l'image en local
 

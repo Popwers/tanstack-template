@@ -1,4 +1,10 @@
-@import 'tailwindcss';
+/*
+ * source(none) + explicit @source: auto-detection follows the module graph, which differs between
+ * TanStack Start's client and SSR passes (and, in Docker, nothing is gitignored), so the SSR page
+ * can name a stylesheet the client never emitted. A filesystem glob is the same in both passes.
+ */
+@import 'tailwindcss' source(none);
+@source './**/*.{ts,tsx}';
 @import 'tw-animate-css';
 @import '@fontsource-variable/inter';
 

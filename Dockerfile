@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1
 # Production image (TanStack Start + Nitro bun preset).
 #   deps   → full dependencies (vite-plus and plugins are devDependencies)
 #   build  → Nitro bundle (.output) + the migrate script bundled into a standalone .mjs

@@ -1,12 +1,14 @@
 /**
  * Legal identity of the product. Every legal page reads it from here: set `SITE` when you start a
  * project, keep `PUBLISHER` and `HOSTING` unless the company or the host changes.
- * `make conformity` fails when `HOSTING` is empty.
+ * `stack-conformity` fails when `HOSTING` is empty.
  */
 
 /** The product itself. */
 export const SITE = {
 	name: 'Mon produit',
+	/** Meta description and share text (og:description). */
+	description: 'TanStack Start, Postgres, Better Auth, R2, Sentry et OpenPanel, prêts pour Coolify.',
 	domain: 'example.com',
 	contactEmail: 'bonjour@example.com',
 } as const;

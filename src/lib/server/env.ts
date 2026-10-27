@@ -16,6 +16,8 @@ const optionalString = z
 
 const envSchema = z.object({
 	NODE_ENV: z.string().default('development'),
+	/** Port the server listens on (Nitro reads the same variable). */
+	PORT: z.coerce.number().int().positive().default(3000),
 	/** Set by TanStack Start while `vp build` prerenders pages. Never set at runtime. */
 	TSS_PRERENDERING: z
 		.string()
@@ -57,6 +59,10 @@ const envSchema = z.object({
 
 	SENTRY_DSN: optionalString,
 
+	/** Cloudflare zone of APP_URL and a token limited to « Cache Purge » on it. Both, or the purge is off. */
+	CLOUDFLARE_ZONE_ID: optionalString,
+	CLOUDFLARE_API_TOKEN: optionalString,
+
 	/** Self-hosted OpenPanel. Absent client id: no analytics. */
 	OPENPANEL_API_URL: z.url().default('https://o.mystudio.digital/api'),
 	OPENPANEL_CLIENT_ID: optionalString,
@@ -92,6 +98,22 @@ export function resetEnvCache(): void {
 /** @returns Whether `NODE_ENV` is `production`, where missing secrets are fatal. */
 export function isProduction(): boolean {
 	return env().NODE_ENV === 'production';
+}
+
+/** Where the public pages are purged after a deploy: Cloudflare with both CLOUDFLARE_* set, nowhere otherwise. */
+export type EdgeCachePurge = { kind: 'cloudflare'; zoneId: string; apiToken: string } | { kind: 'off' };
+
+/** @returns The post-deploy purge target. */
+export function edgeCachePurge(): EdgeCachePurge {
+	const { CLOUDFLARE_ZONE_ID: zoneId, CLOUDFLARE_API_TOKEN: apiToken } = env();
+	return zoneId !== undefined && apiToken !== undefined
+		? { kind: 'cloudflare', zoneId, apiToken }
+		: { kind: 'off' };
+}
+
+/** @returns APP_URL without its trailing slash, the origin of every canonical URL. */
+export function appOrigin(): string {
+	return env().APP_URL.replace(/\/+$/, '');
 }
 
 /** @returns Whether this process is the build-time prerender server. */

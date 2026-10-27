@@ -66,3 +66,35 @@ test('an auth call without a Turnstile token is refused', async () => {
 	});
 	expect(response.status).toBe(400);
 });
+
+test('crawlers get robots.txt and a sitemap of the public pages', async () => {
+	const robots = await fetch(`${E2E_BASE_URL}/robots.txt`);
+	expect(robots.status).toBe(200);
+	expect(await robots.text()).toContain(`Sitemap: ${E2E_BASE_URL}/sitemap.xml`);
+
+	const sitemap = await fetch(`${E2E_BASE_URL}/sitemap.xml`);
+	expect(sitemap.status).toBe(200);
+	expect(sitemap.headers.get('content-type')).toContain('application/xml');
+	const xml = await sitemap.text();
+	expect(xml).toContain(`<loc>${E2E_BASE_URL}/mentions-legales</loc>`);
+	expect(xml).not.toContain('/dashboard');
+});
+
+test('a public page is edge-cacheable and shareable, an app page is private', async () => {
+	const home = await fetch(`${E2E_BASE_URL}/`);
+	expect(home.headers.get('cdn-cache-control')).toContain('max-age=');
+	const html = await home.text();
+	expect(html).toContain(`<link rel="canonical" href="${E2E_BASE_URL}/"`);
+	expect(html).toMatch(/<meta property="og:image" content="[^"]+\/og-image\.png"/);
+	expect((await fetch(`${E2E_BASE_URL}/og-image.png`)).status).toBe(200);
+
+	const signedIn = await fetch(`${E2E_BASE_URL}/`, {
+		headers: { cookie: 'better-auth.session_token=forged' },
+	});
+	expect(signedIn.headers.get('cache-control')).toBe('private, no-store');
+	expect(signedIn.headers.get('cdn-cache-control')).toBeNull();
+
+	const signIn = await fetch(`${E2E_BASE_URL}/sign-in`);
+	expect(signIn.headers.get('cache-control')).toBe('private, no-store');
+	expect(await signIn.text()).not.toContain('rel="canonical"');
+});

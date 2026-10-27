@@ -34,6 +34,8 @@ export const auth = betterAuth({
 		enabled: true,
 		requireEmailVerification: true,
 		minPasswordLength: 10,
+		// A reset means the old password may be known to someone else: every other session ends.
+		revokeSessionsOnPasswordReset: true,
 		sendResetPassword: async ({ user, url }) => {
 			await sendEmail({
 				to: user.email,

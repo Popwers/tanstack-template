@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
@@ -15,7 +16,7 @@ import type { DummyRuleMap, OxlintConfig, OxlintOverride } from 'vite-plus/lint'
  * (https://gist.github.com/Popwers/e112d96aea101e5aa35311048644d9cf), vendored anti-slop and @shadcn/lint.
  *
  * `fmt` and `lint` are typed outside `defineConfig`: an unknown Oxfmt key (`quoteStyle`, `lineWidth`…) is then
- * a type error instead of being silently ignored. `make conformity` checks the same keys.
+ * a type error instead of being silently ignored. `stack-conformity` checks the same keys.
  */
 
 /** Under Vitest the app-server plugins load React in the SSR runner and keep handles open. */
@@ -224,6 +225,7 @@ const plugins: PluginOption[] = isTest
 			nitro({
 				preset: process.env.NITRO_PRESET || 'bun',
 				compressPublicAssets: { gzip: true, brotli: true },
+				plugins: [fileURLToPath(new URL('src/server/plugins/purge-edge-cache.ts', import.meta.url))],
 				routeRules: {
 					'/**': { headers: { 'X-Content-Type-Options': 'nosniff' } },
 				},
