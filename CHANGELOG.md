@@ -1,3 +1,15 @@
+# [1.2.0](https://github.com/Popwers/tanstack-template/compare/v1.1.0...v1.2.0) (2026-10-28)
+
+
+### Bug Fixes
+
+* **auth:** Turnstile widget fails closed with a visible message ([aee52e1](https://github.com/Popwers/tanstack-template/commit/aee52e105a686f77a63459a0ba23f93cff0d29ec))
+
+
+### Features
+
+* **security:** nonce-based Content-Security-Policy on every response ([bfb5726](https://github.com/Popwers/tanstack-template/commit/bfb5726b5099163aac87157fbf7660e3d0877af6))
+
 # [1.1.0](https://github.com/Popwers/tanstack-template/compare/v1.0.1...v1.1.0) (2026-10-27)
 
 
