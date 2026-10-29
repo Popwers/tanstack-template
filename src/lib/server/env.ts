@@ -56,6 +56,8 @@ const envSchema = z.object({
 
 	TURNSTILE_SITE_KEY: optionalString,
 	TURNSTILE_SECRET_KEY: optionalString,
+	/** e2e only: a stand-in for Cloudflare's siteverify (`tests/e2e/siteverify.ts`). Refused in production. */
+	TURNSTILE_SITEVERIFY_URL: optionalString,
 
 	SENTRY_DSN: optionalString,
 

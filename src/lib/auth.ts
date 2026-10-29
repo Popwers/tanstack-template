@@ -4,9 +4,32 @@ import { captcha } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 
 import { db, schema } from '#/lib/db';
+import { SESSION_RETENTION_DAYS } from '#/lib/retention';
+import { authIpAddressOptions } from '#/lib/server/client-ip';
 import { actionEmail, sendEmail } from '#/lib/server/email';
 import { env, isPrerendering } from '#/lib/server/env';
-import { turnstileKeys } from '#/lib/server/turnstile';
+import { turnstileKeys, turnstileSiteVerifyUrl } from '#/lib/server/turnstile';
+
+/** Auth endpoints that need a Turnstile token in `x-captcha-response`: every form open without an account. */
+export const CAPTCHA_ENDPOINTS = ['/sign-up/email', '/sign-in/email', '/request-password-reset'];
+
+/**
+ * Per-route limits, per client IP: at most `max` requests per `window` seconds. Hardened beyond Better
+ * Auth's defaults on the routes worth brute-forcing or abusing as a mail relay. A key must be a path
+ * Better Auth really serves, or the default (100 per minute) applies silently.
+ * @param isTestEnvironment - The e2e suite signs in from one IP far more often than a person would.
+ * @returns The rules, keyed by path relative to `/api/auth`.
+ */
+export function authRateLimitRules(isTestEnvironment: boolean) {
+	return {
+		'/sign-in/email': { window: 60, max: isTestEnvironment ? 30 : 5 },
+		'/sign-up/email': { window: 3600, max: 10 },
+		// Both mail any address without a session: the default (3 per minute) allows 180 mails/hour/IP.
+		'/request-password-reset': { window: 3600, max: 5 },
+		'/send-verification-email': { window: 3600, max: 5 },
+		'/reset-password': { window: 3600, max: 10 },
+	};
+}
 
 /**
  * Better Auth's signing secret. A missing secret stops the server at boot, except in the build-time
@@ -22,14 +45,36 @@ function resolveAuthSecret(): string {
 }
 
 /**
+ * Turnstile check on {@link CAPTCHA_ENDPOINTS}: 400 without a token, 403 for a rejected one, and 500 when
+ * siteverify is unreachable, which `/api/auth/$` turns into 503.
+ */
+export const turnstile = captcha({
+	provider: 'cloudflare-turnstile',
+	secretKey: turnstileKeys().secretKey,
+	endpoints: CAPTCHA_ENDPOINTS,
+	siteVerifyURLOverride: turnstileSiteVerifyUrl(),
+});
+
+/**
  * Server auth instance: e-mail + password with mandatory verification, reset by e-mail (Resend),
- * Turnstile on sign-up, sign-in and reset request.
+ * Turnstile on sign-up, sign-in and reset request, rate limits per client IP.
  */
 export const auth = betterAuth({
 	secret: resolveAuthSecret(),
 	baseURL: env().APP_URL,
 	trustedOrigins: [env().APP_URL, ...env().TRUSTED_ORIGINS],
 	database: drizzleAdapter(db, { provider: 'pg', schema }),
+	session: { expiresIn: SESSION_RETENTION_DAYS * 24 * 60 * 60 },
+	// Stored in Postgres: counters survive a redeploy and hold across instances. `purge:retention`
+	// deletes the idle rows, which Better Auth only prunes when another key rolls over.
+	rateLimit: {
+		enabled: true,
+		storage: 'database',
+		window: 60,
+		max: 100,
+		customRules: authRateLimitRules(env().NODE_ENV === 'test'),
+	},
+	advanced: { ipAddress: authIpAddressOptions },
 	emailAndPassword: {
 		enabled: true,
 		requireEmailVerification: true,
@@ -68,7 +113,7 @@ export const auth = betterAuth({
 	},
 	plugins: [
 		// Public auth endpoints must carry a Turnstile token in `x-captcha-response`.
-		captcha({ provider: 'cloudflare-turnstile', secretKey: turnstileKeys().secretKey }),
+		turnstile,
 		tanstackStartCookies(),
 	],
 });
