@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/Popwers/tanstack-template/compare/v1.3.0...v1.3.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* **backup:** alert a failed backup by email, drop the Sentry cron monitor ([#2](https://github.com/Popwers/tanstack-template/issues/2)) ([3c8c4ca](https://github.com/Popwers/tanstack-template/commit/3c8c4caebd0ec14c36471432b4c73d0cea785bf3))
+
 # [1.3.0](https://github.com/Popwers/tanstack-template/compare/v1.2.0...v1.3.0) (2026-10-29)
 
 
