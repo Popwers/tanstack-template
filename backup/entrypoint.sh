@@ -43,9 +43,6 @@ if [ "$fields" != "5" ] && [ "$fields" != "6" ]; then
 	CRON="$DEFAULT_CRON"
 fi
 
-# backup.sh declares this schedule to its Sentry cron monitor (supercronic passes its env on).
-export BACKUP_SCHEDULE="$CRON"
-
 CRONFILE=/tmp/crontab
 echo "$CRON /opt/backup/backup.sh" > "$CRONFILE"
 

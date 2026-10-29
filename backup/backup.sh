@@ -6,9 +6,8 @@
 # The prefix (BACKUP_KEY_PREFIX) lets one R2 lifecycle rule expire only the backups
 # (objects under `backup-` expire after 3 days, DEPLOY.md §4) without touching app files.
 #
-# Each run checks in to a Sentry cron monitor (in_progress, then ok or error): a failed run opens
-# an issue, and a run that never starts is reported as missed. With a 3-day retention, three silent
-# failures would leave nothing to restore. The check-in is best effort and never fails the backup.
+# A failed run sends one alert email (send_alert below): with a 3-day retention, three silent
+# failures would leave nothing to restore.
 #
 # Expected variables:
 #   POSTGRES_HOST, POSTGRES_PORT (default 5432), POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
@@ -17,9 +16,11 @@
 #   UPLOADS_DIR       (default "/data/uploads", mounted read-only)
 #   UPLOADS_BUCKET    (R2 mode only: archive the whole s3://<bucket>/ instead of UPLOADS_DIR)
 #   BACKUP_LOCAL_DIR  (test mode: copy the files there instead of uploading to R2)
-#   SENTRY_DSN        (optional: the cron monitor's project; unset, no check-in)
-#   SENTRY_MONITOR_SLUG (default "backup")
-#   BACKUP_SCHEDULE   (set by entrypoint.sh: the crontab the monitor expects)
+#
+# Failure alert (one email per failed run, through Resend; unset = log line only):
+#   RESEND_API_KEY, BACKUP_ALERT_EMAIL_TO (comma-separated for several recipients)
+#   BACKUP_ALERT_EMAIL_FROM (falls back to EMAIL_FROM): a sender on a domain the key may send from;
+#                     its display name (`Name <address>`) names the project in the subject
 set -euo pipefail
 
 require() {
@@ -34,33 +35,52 @@ DB_FILE=""
 UPLOADS_FILE=""
 SYNC_DIR=""
 
-# --- Sentry cron monitor ---
-# The DSN https://<public-key>@<host>/<project-id> gives the check-in endpoint
-# https://<host>/api/<project-id>/cron/<slug>/<public-key>/.
-MONITOR_URL=""
-if [[ "${SENTRY_DSN:-}" =~ ^(https?)://([^:@/]+)(:[^@/]*)?@([^/]+)/(.*/)?([0-9]+)/?$ ]]; then
-	MONITOR_URL="${BASH_REMATCH[1]}://${BASH_REMATCH[4]}/api/${BASH_REMATCH[6]}/cron/${SENTRY_MONITOR_SLUG:-backup}/${BASH_REMATCH[2]}/"
-elif [ -n "${SENTRY_DSN:-}" ]; then
-	echo "[backup] WARNING: SENTRY_DSN is not a DSN, no cron check-in" >&2
-fi
-CHECK_IN_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || date -u +%s)
+# --- Failure alert: one email per failed run ---
+# The first failed step sends one email to BACKUP_ALERT_EMAIL_TO through Resend. Best effort: without
+# RESEND_API_KEY, BACKUP_ALERT_EMAIL_TO or a sender it only logs a line, and a Resend outage never
+# changes the backup's outcome. The key never reaches the log or the process list.
+STEP="configuration"
+ALERT_SENT=0
 
-# Sends one check-in. Never fails: a Sentry outage must not cost a backup.
-check_in() {
-	local status="$1"
-	[ -n "$MONITOR_URL" ] || return 0
-	local url="${MONITOR_URL}?check_in_id=${CHECK_IN_ID}&status=${status}"
-	local body=""
-	# The first check-in creates or updates the monitor with the schedule supercronic runs
-	# (5-field crontab only: Sentry has no seconds field). Missed after 30 min, failed after 2 h.
-	if [ "$status" = "in_progress" ] && [ "$(echo "${BACKUP_SCHEDULE:-}" | awk '{print NF}')" = "5" ]; then
-		body=$(printf '{"monitor_config":{"schedule":{"type":"crontab","value":"%s"},"checkin_margin":30,"max_runtime":120,"timezone":"UTC","failure_issue_threshold":1,"recovery_threshold":1}}' "$BACKUP_SCHEDULE")
+# Sends the failure email for the given step. Always returns 0.
+send_alert() {
+	local step="$1" detail="$2"
+	[ "$ALERT_SENT" -eq 0 ] || return 0
+	ALERT_SENT=1
+	local to="${BACKUP_ALERT_EMAIL_TO:-}" from="${BACKUP_ALERT_EMAIL_FROM:-${EMAIL_FROM:-}}"
+	if [ -z "${RESEND_API_KEY:-}" ] || [ -z "$to" ] || [ -z "$from" ]; then
+		echo "[backup] alert email skipped: RESEND_API_KEY, BACKUP_ALERT_EMAIL_TO or BACKUP_ALERT_EMAIL_FROM is unset" >&2
+		return 0
 	fi
-	if [ -n "$body" ]; then
-		curl -fsS -m 10 -o /dev/null -X POST -H 'Content-Type: application/json' --data "$body" "$url" \
-			|| echo "[backup] WARNING: Sentry check-in ($status) failed" >&2
+	# The project is the sender's display name (`App <no-reply@app.fr>`), else the sender's domain.
+	local project="" addr="$from"
+	if [[ "$from" == *"<"* ]]; then
+		project="${from%%<*}"
+		addr="${from##*<}"
+		addr="${addr%%>*}"
+	fi
+	project="${project//\"/}"
+	project="${project%"${project##*[![:space:]]}"}"
+	project="${project#"${project%%[![:space:]]*}"}"
+	[ -n "$project" ] || project="${addr##*@}"
+	local now text payload
+	now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+	text=$(printf 'The backup of %s failed.\n\nStep: %s\nDate (UTC): %s\n%s\n\nThe details are in the log of the backup container on Coolify.' \
+		"$project" "$step" "$now" "$detail")
+	payload=$(jq -n --arg from "$from" --arg to "$to" --arg subject "[$project] Backup failed: $step" --arg text "$text" \
+		'{from: $from, to: [$to | split(",")[] | gsub("^ +| +$"; "") | select(. != "")], subject: $subject, text: $text}') || {
+		echo "[backup] WARNING: alert email not sent (jq failed)" >&2
+		return 0
+	}
+	# The key goes in through curl's stdin config. The idempotency key keeps a retried request to
+	# one email.
+	if printf 'header = "Authorization: Bearer %s"\n' "$RESEND_API_KEY" | curl --config - -fsS \
+		--max-time 15 --retry 2 -o /dev/null -X POST https://api.resend.com/emails \
+		-H 'Content-Type: application/json' -H "Idempotency-Key: backup-${now}" \
+		--data "$payload"; then
+		echo "[backup] alert email sent ($step)" >&2
 	else
-		curl -fsS -m 10 -o /dev/null "$url" || echo "[backup] WARNING: Sentry check-in ($status) failed" >&2
+		echo "[backup] WARNING: alert email not sent (Resend unreachable or refused)" >&2
 	fi
 	return 0
 }
@@ -72,18 +92,15 @@ on_exit() {
 		rm -rf "$SYNC_DIR"
 	fi
 	if [ "$exit_code" -eq 0 ]; then
-		check_in ok
 		return
 	fi
-	# The error check-in opens a Sentry issue (the alert). The original exit code is
-	# preserved so supercronic counts the failure too.
-	check_in error
+	# The original exit code is preserved so supercronic counts the failure too.
 	echo "[backup] FAILED (exit $exit_code) - see the logs above" >&2
+	send_alert "$STEP" "Exit code: $exit_code"
 	exit "$exit_code"
 }
 
 trap on_exit EXIT
-check_in in_progress
 
 LOCAL_DIR="${BACKUP_LOCAL_DIR:-}"
 UPLOADS_BUCKET="${UPLOADS_BUCKET:-}"
@@ -144,6 +161,7 @@ else
 fi
 
 # 1. Database. Custom format (-F c) is already compressed: no extra gzip.
+STEP="database dump"
 export PGPASSWORD="$POSTGRES_PASSWORD"
 pg_dump \
 	--host="$POSTGRES_HOST" \
@@ -157,12 +175,14 @@ pg_dump \
 unset PGPASSWORD
 
 echo "[backup] dump ok ($(du -h "$DB_FILE" | cut -f1))"
+STEP="database upload"
 publish "$DB_FILE" "$DB_KEY"
 rm -f "$DB_FILE"
 
 # 2. Uploads. The database dump above is already safe whatever happens here, but a failed
-# archive still fails the run, so the monitor reports it. The bucket is first copied to a temp dir so the archive has the same layout whatever
-# the source, and restore.sh does not need to know where it came from.
+# archive still fails the run, so the alert email reports it. The bucket is first copied to a temp
+# dir so the archive has the same layout whatever the source, and restore.sh does not need to know
+# where it came from.
 backup_uploads() {
 	local dir="$UPLOADS_DIR" source="$UPLOADS_DIR"
 	if [ -n "$UPLOADS_BUCKET" ]; then
@@ -189,6 +209,7 @@ backup_uploads() {
 	publish "$UPLOADS_FILE" "$UPLOADS_KEY" || return 1
 }
 
+STEP="uploads archive"
 if ! backup_uploads; then
 	echo "[backup] uploads backup failed, the database backup is intact" >&2
 	exit 1

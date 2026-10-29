@@ -9,11 +9,13 @@ Second Coolify app (same repo, base directory `backup/`). Runs `backup.sh` on `B
 Both go to the **backups** bucket `CF_BUCKET` (`<name>-backups`, EU jurisdiction), never to the files
 bucket. An R2 lifecycle rule on the prefix expires them after 3 days (DEPLOY.md §4).
 
-A failed files archive fails the run too (the database dump is uploaded first and stays). With
-`SENTRY_DSN`, each run checks in to the Sentry cron monitor `SENTRY_MONITOR_SLUG` (`in_progress`, then
-`ok` or `error`): a failure opens an issue, a run that never starts is reported missed after 30 minutes.
-The first scheduled run creates the monitor with the `BACKUP_CRON` schedule (UTC). A check-in that fails
-only logs a warning: Sentry never costs a backup.
+A failed files archive fails the run too (the database dump is uploaded first and stays). The first
+failed step of a run (configuration, database dump, database upload, uploads archive) sends **one** email
+to `BACKUP_ALERT_EMAIL_TO` through Resend: subject `[<project>] Backup failed: <step>` (the project is the
+sender's display name), body with the step, the UTC date and the exit code, no secret. Without these
+variables the run logs `alert email skipped`; a Resend outage only logs a `WARNING` and never changes the
+backup. No Sentry cron monitor: a backup that stops running sends nothing, so watch the container and the
+bucket.
 
 | Variable | Value |
 | --- | --- |
@@ -23,8 +25,9 @@ only logs a warning: Sentry never costs a backup.
 | `UPLOADS_BUCKET` | `<name>-files` (unset → archive `UPLOADS_DIR`, default `/data/uploads`) |
 | `BACKUP_KEY_PREFIX` | default `backup-` |
 | `BACKUP_CRON` | default `0 */6 * * *` |
-| `SENTRY_DSN` | the app's server DSN (optional: no check-in without it) |
-| `SENTRY_MONITOR_SLUG` | default `backup` |
+| `RESEND_API_KEY` | the app's Resend key: sends the failure alert email |
+| `BACKUP_ALERT_EMAIL_TO` | recipient(s) of the alert, comma-separated |
+| `BACKUP_ALERT_EMAIL_FROM` | `<Name> <no-reply@<domain>>`, default `EMAIL_FROM`; on the key's domain |
 
 Run once by hand: `docker compose run --rm backup --once`, or in Coolify: Execute command
 `/opt/backup/backup.sh`. Restore: `restore.sh <db-dump-key> [uploads-key]` (read it first: it
