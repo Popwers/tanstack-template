@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/Popwers/tanstack-template/compare/v1.2.0...v1.3.0) (2026-10-29)
+
+
+### Features
+
+* bring the template up to the 29/10 project standard ([#1](https://github.com/Popwers/tanstack-template/issues/1)) ([268554d](https://github.com/Popwers/tanstack-template/commit/268554d597cb577bc2e7a5b2006702a11fa42f15))
+
 # [1.2.0](https://github.com/Popwers/tanstack-template/compare/v1.1.0...v1.2.0) (2026-10-28)
 
 
