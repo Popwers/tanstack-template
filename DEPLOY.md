@@ -28,7 +28,9 @@ injecte chaque variable *Buildtime* en `ARG`) : en changer une demande un nouvea
 | `EMAIL_FROM` | prod | `<Nom> <no-reply@<domaine>>` | Expéditeur vérifié dans Resend (région `eu-west-1`) |
 | `EMAIL_REPLY_TO` | non | `bonjour@<domaine>` | |
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | prod | | Widget *Managed* sur le domaine. Le serveur refuse de démarrer en prod sans |
+| `TURNSTILE_SITEVERIFY_URL` | **jamais en prod** | | Doublure de siteverify pour l'e2e (`tests/e2e/siteverify.ts`). Le serveur refuse de démarrer en prod avec |
 | `SENTRY_DSN` | non | | Erreurs serveur |
+| `SENTRY_TRACES_SAMPLE_RATE` | non, *runtime + build* | `0.1` | Part des traces gardées (≤ `0.1` : le quota Sentry est partagé par toute l'organisation). Au build, il fixe aussi le taux du navigateur |
 | `VITE_SENTRY_DSN` | non, *build* | | Erreurs navigateur (inliné au build) |
 | `SENTRY_AUTH_TOKEN`, `SENTRY_PROJECT` | non, *build seulement* | | Upload des source maps (org `mystudiodigital`) |
 | `OPENPANEL_API_URL` | non | `https://o.mystudio.digital/api` | OpenPanel self-hosted |
@@ -68,8 +70,22 @@ Deuxième app Coolify, même dépôt, **Base Directory** `/backup`, sans port ni
 
 Bucket `<name>-backups` : expiration **3 jours** sur le préfixe `backup-` seulement, abandon des
 uploads multipart après 7 jours, object lock de 2 jours. Rien n'expire sur `<name>-files`. La politique
-de confidentialité annonce ces 3 jours : gardez les deux alignés. Premier test : Execute command
-`/opt/backup/backup.sh`, puis vérifier l'objet dans le bucket.
+de confidentialité annonce ces 3 jours (`BACKUP_RETENTION_DAYS` dans `src/lib/retention.ts`) : gardez
+les deux alignés. Premier test : Execute command `/opt/backup/backup.sh`, puis vérifier l'objet dans le
+bucket.
+
+Alerte et heartbeat : avec `SENTRY_DSN`, chaque exécution s'enregistre auprès du moniteur cron Sentry
+`backup` (créé au premier passage avec le planning `BACKUP_CRON`). Une exécution en échec (base **ou**
+fichiers) ouvre une issue, une exécution qui ne démarre pas est signalée manquée après 30 minutes. Une
+panne de Sentry ne fait jamais échouer le backup. Vérifiez le moniteur dans Sentry → Crons après le
+premier passage.
+
+## 4 bis. Purges planifiées
+
+Chaque nuit à 02:30 UTC, la tâche Nitro `purge:retention` (dans le processus de l'app) efface les
+sessions expirées avec leur IP, les liens de confirmation expirés et les compteurs de rate limit inactifs
+depuis 24 h. Les durées viennent de `src/lib/retention.ts`, que la politique de confidentialité lit
+aussi. Log attendu : `[purge:retention] deleted …`.
 
 ## 5. Vérifier en production
 
