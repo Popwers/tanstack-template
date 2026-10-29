@@ -74,11 +74,11 @@ de confidentialité annonce ces 3 jours (`BACKUP_RETENTION_DAYS` dans `src/lib/r
 les deux alignés. Premier test : Execute command `/opt/backup/backup.sh`, puis vérifier l'objet dans le
 bucket.
 
-Alerte et heartbeat : avec `SENTRY_DSN`, chaque exécution s'enregistre auprès du moniteur cron Sentry
-`backup` (créé au premier passage avec le planning `BACKUP_CRON`). Une exécution en échec (base **ou**
-fichiers) ouvre une issue, une exécution qui ne démarre pas est signalée manquée après 30 minutes. Une
-panne de Sentry ne fait jamais échouer le backup. Vérifiez le moniteur dans Sentry → Crons après le
-premier passage.
+Alerte d'échec, par e-mail : `RESEND_API_KEY` (la clé de l'app), `BACKUP_ALERT_EMAIL_TO` et
+`BACKUP_ALERT_EMAIL_FROM` (défaut `EMAIL_FROM`). Une exécution en échec (base **ou** fichiers) envoie un
+seul e-mail qui nomme l'étape ratée ; une panne de Resend ne fait jamais échouer le backup. Pas de
+moniteur cron Sentry. Testez l'alerte après le premier déploiement : Execute command
+`POSTGRES_HOST=invalid /opt/backup/backup.sh`, puis vérifiez l'e-mail.
 
 ## 4 bis. Purges planifiées
 
