@@ -1,7 +1,7 @@
 /**
  * Legal identity of the product. Every legal page reads it from here: set `SITE` when you start a
- * project, keep `PUBLISHER` and `HOSTING` unless the company or the host changes.
- * `stack-conformity` fails when `HOSTING` is empty.
+ * project, keep `PUBLISHER` and `HOSTING` unless the company or the host changes, and replace every
+ * `[bracketed]` placeholder of `PROCESSORS`. `stack-conformity` fails when `HOSTING` is empty.
  */
 
 /** The product itself. */
@@ -29,3 +29,42 @@ export const HOSTING =
 /** Object storage provider (R2 buckets in the EU jurisdiction). */
 export const FILE_STORAGE =
 	'Cloudflare R2, service de Cloudflare, Inc., 101 Townsend Street, San Francisco, CA 94107, États-Unis (données stockées dans l’Union européenne)';
+
+/** One sub-processor of the privacy policy: what it does, who it is, where the data goes. */
+export interface Processor {
+	purpose: string;
+	provider: string;
+}
+
+/** Transfers to the United States rest on the standard contractual clauses. */
+const US_TRANSFER = 'États-Unis, encadré par les clauses contractuelles types';
+
+/**
+ * Every sub-processor, as the standard lists them: hosting, CDN/WAF, storage, e-mail sending and the
+ * contact mailbox host, captcha, error tracking, analytics, payment. Replace the `[bracketed]`
+ * placeholders; delete the payment line when the product sells nothing, and add every third-party API
+ * the code calls with user data.
+ */
+export const PROCESSORS: readonly Processor[] = [
+	{ purpose: 'Hébergement de l’application et de la base de données', provider: HOSTING },
+	{
+		purpose: 'Réseau de diffusion (CDN) et pare-feu applicatif',
+		provider: `Cloudflare, Inc. (${US_TRANSFER})`,
+	},
+	{ purpose: 'Stockage des fichiers et des sauvegardes', provider: FILE_STORAGE },
+	{ purpose: 'Envoi des e-mails', provider: `Resend, Inc. (${US_TRANSFER})` },
+	{
+		purpose: 'Boîte de réception de l’adresse de contact',
+		provider: '[Hébergeur de la boîte de contact, par exemple o2switch (France) ou Google Workspace]',
+	},
+	{
+		purpose: 'Vérification anti-robot',
+		provider: `Cloudflare Turnstile, Cloudflare, Inc. (${US_TRANSFER})`,
+	},
+	{ purpose: 'Suivi des erreurs', provider: `Functional Software, Inc. (Sentry, ${US_TRANSFER})` },
+	{ purpose: 'Mesure d’audience', provider: `OpenPanel, auto-hébergé par l’éditeur chez ${HOSTING}` },
+	{
+		purpose: 'Paiement',
+		provider: '[Stripe Payments Europe, Ltd. (Irlande) — à retirer si le produit ne vend rien]',
+	},
+];

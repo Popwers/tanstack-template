@@ -26,3 +26,17 @@ export function turnstileKeys(): TurnstileKeys {
 	}
 	throw new Error('TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY must both be set (required in production).');
 }
+
+/**
+ * Siteverify endpoint the captcha plugin calls: Cloudflare's own, unless the e2e suite points it at its
+ * stand-in to simulate an outage or a rejected token.
+ * @returns The override URL, or `undefined` for Cloudflare's endpoint.
+ * @throws Error when production sets `TURNSTILE_SITEVERIFY_URL`: tokens would be checked by another host.
+ */
+export function turnstileSiteVerifyUrl(): string | undefined {
+	const url = env().TURNSTILE_SITEVERIFY_URL;
+	if (url !== undefined && isProduction()) {
+		throw new Error('TURNSTILE_SITEVERIFY_URL is an e2e seam: never set it in production.');
+	}
+	return url;
+}

@@ -6,13 +6,20 @@
 # The prefix (BACKUP_KEY_PREFIX) lets one R2 lifecycle rule expire only the backups
 # (objects under `backup-` expire after 3 days, DEPLOY.md §4) without touching app files.
 #
+# Each run checks in to a Sentry cron monitor (in_progress, then ok or error): a failed run opens
+# an issue, and a run that never starts is reported as missed. With a 3-day retention, three silent
+# failures would leave nothing to restore. The check-in is best effort and never fails the backup.
+#
 # Expected variables:
 #   POSTGRES_HOST, POSTGRES_PORT (default 5432), POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
 #   CF_ENDPOINT, CF_ACCESS_KEY_ID, CF_ACCESS_SECRET, CF_BUCKET   (not needed in local mode)
 #   BACKUP_KEY_PREFIX (default "backup-")
 #   UPLOADS_DIR       (default "/data/uploads", mounted read-only)
-#   UPLOADS_BUCKET    (R2 mode only: archive s3://<bucket>/uploads/ instead of UPLOADS_DIR)
+#   UPLOADS_BUCKET    (R2 mode only: archive the whole s3://<bucket>/ instead of UPLOADS_DIR)
 #   BACKUP_LOCAL_DIR  (test mode: copy the files there instead of uploading to R2)
+#   SENTRY_DSN        (optional: the cron monitor's project; unset, no check-in)
+#   SENTRY_MONITOR_SLUG (default "backup")
+#   BACKUP_SCHEDULE   (set by entrypoint.sh: the crontab the monitor expects)
 set -euo pipefail
 
 require() {
@@ -27,20 +34,56 @@ DB_FILE=""
 UPLOADS_FILE=""
 SYNC_DIR=""
 
+# --- Sentry cron monitor ---
+# The DSN https://<public-key>@<host>/<project-id> gives the check-in endpoint
+# https://<host>/api/<project-id>/cron/<slug>/<public-key>/.
+MONITOR_URL=""
+if [[ "${SENTRY_DSN:-}" =~ ^(https?)://([^:@/]+)(:[^@/]*)?@([^/]+)/(.*/)?([0-9]+)/?$ ]]; then
+	MONITOR_URL="${BASH_REMATCH[1]}://${BASH_REMATCH[4]}/api/${BASH_REMATCH[6]}/cron/${SENTRY_MONITOR_SLUG:-backup}/${BASH_REMATCH[2]}/"
+elif [ -n "${SENTRY_DSN:-}" ]; then
+	echo "[backup] WARNING: SENTRY_DSN is not a DSN, no cron check-in" >&2
+fi
+CHECK_IN_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || date -u +%s)
+
+# Sends one check-in. Never fails: a Sentry outage must not cost a backup.
+check_in() {
+	local status="$1"
+	[ -n "$MONITOR_URL" ] || return 0
+	local url="${MONITOR_URL}?check_in_id=${CHECK_IN_ID}&status=${status}"
+	local body=""
+	# The first check-in creates or updates the monitor with the schedule supercronic runs
+	# (5-field crontab only: Sentry has no seconds field). Missed after 30 min, failed after 2 h.
+	if [ "$status" = "in_progress" ] && [ "$(echo "${BACKUP_SCHEDULE:-}" | awk '{print NF}')" = "5" ]; then
+		body=$(printf '{"monitor_config":{"schedule":{"type":"crontab","value":"%s"},"checkin_margin":30,"max_runtime":120,"timezone":"UTC","failure_issue_threshold":1,"recovery_threshold":1}}' "$BACKUP_SCHEDULE")
+	fi
+	if [ -n "$body" ]; then
+		curl -fsS -m 10 -o /dev/null -X POST -H 'Content-Type: application/json' --data "$body" "$url" \
+			|| echo "[backup] WARNING: Sentry check-in ($status) failed" >&2
+	else
+		curl -fsS -m 10 -o /dev/null "$url" || echo "[backup] WARNING: Sentry check-in ($status) failed" >&2
+	fi
+	return 0
+}
+
 on_exit() {
 	local exit_code=$?
 	rm -f "$DB_FILE" "$UPLOADS_FILE"
 	if [ -n "$SYNC_DIR" ]; then
 		rm -rf "$SYNC_DIR"
 	fi
-	[ "$exit_code" -eq 0 ] && return
-	# No email alert (deliberate): failures are logged loudly, Coolify exposes the
-	# container logs. The original exit code is preserved so supercronic counts the failure.
+	if [ "$exit_code" -eq 0 ]; then
+		check_in ok
+		return
+	fi
+	# The error check-in opens a Sentry issue (the alert). The original exit code is
+	# preserved so supercronic counts the failure too.
+	check_in error
 	echo "[backup] FAILED (exit $exit_code) - see the logs above" >&2
 	exit "$exit_code"
 }
 
 trap on_exit EXIT
+check_in in_progress
 
 LOCAL_DIR="${BACKUP_LOCAL_DIR:-}"
 UPLOADS_BUCKET="${UPLOADS_BUCKET:-}"
@@ -117,8 +160,8 @@ echo "[backup] dump ok ($(du -h "$DB_FILE" | cut -f1))"
 publish "$DB_FILE" "$DB_KEY"
 rm -f "$DB_FILE"
 
-# 2. Uploads. Never fails the run: the database dump above is already safe.
-# The bucket is first copied to a temp dir so the archive has the same layout whatever
+# 2. Uploads. The database dump above is already safe whatever happens here, but a failed
+# archive still fails the run, so the monitor reports it. The bucket is first copied to a temp dir so the archive has the same layout whatever
 # the source, and restore.sh does not need to know where it came from.
 backup_uploads() {
 	local dir="$UPLOADS_DIR" source="$UPLOADS_DIR"
@@ -147,7 +190,8 @@ backup_uploads() {
 }
 
 if ! backup_uploads; then
-	echo "[backup] WARNING: uploads backup failed, the database backup is intact" >&2
+	echo "[backup] uploads backup failed, the database backup is intact" >&2
+	exit 1
 fi
 
 echo "[backup] done ($TS)"

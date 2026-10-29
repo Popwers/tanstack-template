@@ -18,15 +18,18 @@ WORKDIR /app
 ENV NODE_ENV=production \
 	NITRO_PRESET=bun
 # Coolify build args, all optional. SENTRY_AUTH_TOKEN uploads source maps; SOURCE_COMMIT ("Include
-# Source Commit in Build") names the release; VITE_SENTRY_DSN is inlined in the browser bundle.
+# Source Commit in Build") names the release; VITE_SENTRY_DSN and the trace rate are inlined in the
+# browser bundle.
 ARG SENTRY_AUTH_TOKEN
 ARG SENTRY_PROJECT
+ARG SENTRY_TRACES_SAMPLE_RATE
 ARG SOURCE_COMMIT
 ARG VITE_SENTRY_DSN
 ENV SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN \
 	SENTRY_PROJECT=$SENTRY_PROJECT \
 	SENTRY_RELEASE=$SOURCE_COMMIT \
-	VITE_SENTRY_DSN=$VITE_SENTRY_DSN
+	VITE_SENTRY_DSN=$VITE_SENTRY_DSN \
+	VITE_SENTRY_TRACES_SAMPLE_RATE=$SENTRY_TRACES_SAMPLE_RATE
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Never ship source maps, even when the upload was skipped.

@@ -1,4 +1,12 @@
-import { FILE_STORAGE, HOSTING, PUBLISHER, SITE } from './site';
+import {
+	ANALYTICS_RETENTION_MONTHS,
+	BACKUP_RETENTION_DAYS,
+	ERROR_EVENT_RETENTION_DAYS,
+	RATE_LIMIT_RETENTION_HOURS,
+	SESSION_RETENTION_DAYS,
+} from '#/lib/retention';
+
+import { FILE_STORAGE, HOSTING, PROCESSORS, PUBLISHER, SITE } from './site';
 
 /** One section of a legal page. */
 export interface LegalSection {
@@ -49,7 +57,7 @@ export const MENTIONS_LEGALES: LegalDocument = {
 
 export const CONFIDENTIALITE: LegalDocument = {
 	title: 'Politique de confidentialité',
-	updatedAt: '2026-10-27',
+	updatedAt: '2026-10-29',
 	sections: [
 		{
 			heading: 'Responsable du traitement',
@@ -59,25 +67,23 @@ export const CONFIDENTIALITE: LegalDocument = {
 			heading: 'Données traitées',
 			body: [
 				'Compte : nom, adresse e-mail, mot de passe (stocké haché), dates de connexion. Base légale : exécution du contrat.',
-				'Sécurité : adresse IP et navigateur de chaque session, vérification anti-robot Cloudflare Turnstile. Base légale : intérêt légitime.',
+				'Sécurité : adresse IP et navigateur de chaque session, compteurs anti-abus par adresse IP, vérification anti-robot Cloudflare Turnstile. Base légale : intérêt légitime.',
 				'Mesure d’audience : OpenPanel, hébergé par l’éditeur, sans cookie et de façon agrégée. Base légale : intérêt légitime.',
-				'Erreurs techniques : Sentry, sans adresse IP ni contenu saisi. Base légale : intérêt légitime.',
+				'Erreurs techniques : Sentry, sans adresse IP, sans contenu saisi et sans les jetons des liens reçus par e-mail. Base légale : intérêt légitime.',
 			],
 		},
 		{
 			heading: 'Destinataires et sous-traitants',
-			body: [
-				`Hébergement : ${HOSTING}.`,
-				`Stockage des fichiers : ${FILE_STORAGE}.`,
-				'Envoi des e-mails : Resend, Inc. (États-Unis), encadré par les clauses contractuelles types.',
-				'Vérification anti-robot : Cloudflare, Inc. (États-Unis), encadré par les clauses contractuelles types.',
-				'Suivi des erreurs : Functional Software, Inc. (Sentry, États-Unis), encadré par les clauses contractuelles types.',
-			],
+			body: PROCESSORS.map(({ purpose, provider }) => `${purpose} : ${provider}.`),
 		},
 		{
 			heading: 'Durées de conservation',
 			body: [
-				'Les données du compte sont conservées tant que le compte est actif, puis supprimées. Les sauvegardes, chiffrées au repos, sont conservées 3 jours puis effacées automatiquement.',
+				'Compte : jusqu’à sa suppression, sur simple demande à l’adresse de contact.',
+				`Session de connexion, avec son adresse IP et son navigateur : ${SESSION_RETENTION_DAYS} jours sans utilisation, puis effacée chaque nuit. Liens de confirmation et de réinitialisation : effacés la nuit suivant leur expiration.`,
+				`Compteurs anti-abus par adresse IP : ${RATE_LIMIT_RETENTION_HOURS} heures après la dernière requête.`,
+				`Sauvegardes, chiffrées au repos : ${BACKUP_RETENTION_DAYS} jours, puis effacées automatiquement.`,
+				`Erreurs techniques : ${ERROR_EVENT_RETENTION_DAYS} jours. Mesure d’audience : ${ANALYTICS_RETENTION_MONTHS} mois.`,
 			],
 		},
 		{

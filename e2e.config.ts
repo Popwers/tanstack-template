@@ -2,11 +2,18 @@ import { web } from '@e2e-dev/web';
 import type { E2EConfig } from 'e2e';
 import { grok } from 'e2e/oauth/grok';
 
-import { E2E_BASE_URL, E2E_DB_PORT, E2E_PORT } from './tests/e2e/isolation';
+import {
+	E2E_AUTH_SECRET,
+	E2E_BASE_URL,
+	E2E_DB_PORT,
+	E2E_PORT,
+	E2E_SITEVERIFY_PORT,
+} from './tests/e2e/isolation';
 
 /**
  * Golden paths against the production build. `tests/e2e/serve.sh` builds the app, starts a throwaway
- * Postgres (`db.sh`), migrates it and serves `.output`; e-mails land in `storage/e2e/_outbox`.
+ * Postgres (`db.sh`), migrates it, starts the Turnstile siteverify stand-in (`siteverify.ts`) and serves
+ * `.output`; e-mails land in `storage/e2e/_outbox`.
  * Its EXIT trap removes the database without waiting on the server.
  */
 export default {
@@ -31,7 +38,7 @@ export default {
 						APP_URL: E2E_BASE_URL,
 						DATABASE_URL: `postgres://app:app@127.0.0.1:${E2E_DB_PORT}/app`,
 						E2E_DB_PORT: String(E2E_DB_PORT),
-						BETTER_AUTH_SECRET: 'e2e-only-secret-never-used-outside-e2e',
+						BETTER_AUTH_SECRET: E2E_AUTH_SECRET,
 						STORAGE_DIR: 'storage/e2e',
 						RESEND_API_KEY: '',
 						MAILPIT_URL: '',
@@ -41,6 +48,8 @@ export default {
 						OPENPANEL_CLIENT_ID: '',
 						TURNSTILE_SITE_KEY: '',
 						TURNSTILE_SECRET_KEY: '',
+						E2E_SITEVERIFY_PORT: String(E2E_SITEVERIFY_PORT),
+						TURNSTILE_SITEVERIFY_URL: `http://127.0.0.1:${E2E_SITEVERIFY_PORT}/siteverify`,
 					},
 				},
 			},

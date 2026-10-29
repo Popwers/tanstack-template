@@ -1,7 +1,7 @@
-import { boolean, index, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, boolean, index, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 /**
- * Better Auth core tables (user, session, account, verification). Add the product tables below them,
+ * Better Auth core tables (user, session, account, verification, rateLimit). Add the product tables below them,
  * then `make db-generate` writes the migration that the container applies at boot.
  */
 
@@ -76,3 +76,14 @@ export const verification = pgTable(
 	},
 	(table) => [index('verification_identifier_idx').on(table.identifier)],
 );
+
+/**
+ * Better Auth rate-limit counters (`rateLimit.storage: 'database'`), one row per client IP and auth route.
+ * `lastRequest` is epoch milliseconds. The daily `purge:retention` task deletes the idle rows.
+ */
+export const rateLimit = pgTable('rate_limit', {
+	id: text('id').primaryKey(),
+	key: text('key').notNull().unique(),
+	count: integer('count').notNull().default(0),
+	lastRequest: bigint('last_request', { mode: 'number' }).notNull(),
+});

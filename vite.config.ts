@@ -226,6 +226,16 @@ const plugins: PluginOption[] = isTest
 				preset: process.env.NITRO_PRESET || 'bun',
 				compressPublicAssets: { gzip: true, brotli: true },
 				plugins: [fileURLToPath(new URL('src/server/plugins/purge-edge-cache.ts', import.meta.url))],
+				// Daily jobs run in the server process, 02:30 UTC. Every instance runs them: the deletes are idempotent.
+				experimental: { tasks: true },
+				tasks: {
+					'purge:retention': {
+						handler: fileURLToPath(
+							new URL('src/server/tasks/purge-retention.ts', import.meta.url),
+						),
+					},
+				},
+				scheduledTasks: { '30 2 * * *': ['purge:retention'] },
 				routeRules: {
 					'/**': { headers: { 'X-Content-Type-Options': 'nosniff' } },
 				},
