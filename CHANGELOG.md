@@ -1,3 +1,10 @@
+## [1.3.2](https://github.com/Popwers/tanstack-template/compare/v1.3.1...v1.3.2) (2026-10-30)
+
+
+### Bug Fixes
+
+* **errors:** French error screen with retry and Sentry report instead of TanStack's default ([#3](https://github.com/Popwers/tanstack-template/issues/3)) ([2b21344](https://github.com/Popwers/tanstack-template/commit/2b21344dc4a2f7ca4e3cd3f0ab678da86df9c812))
+
 ## [1.3.1](https://github.com/Popwers/tanstack-template/compare/v1.3.0...v1.3.1) (2026-10-29)
 
 
