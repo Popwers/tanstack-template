@@ -1,6 +1,8 @@
 import { createRouter } from '@tanstack/react-router';
 import { getGlobalStartContext } from '@tanstack/react-start';
 
+import { RouteError } from '#/components/route-error';
+
 import { routeTree } from './routeTree.gen';
 
 /**
@@ -13,6 +15,8 @@ export function getRouter() {
 		routeTree,
 		scrollRestoration: true,
 		defaultPreload: 'intent',
+		// Inside the root layout for a child route's error, so the header and footer stay.
+		defaultErrorComponent: RouteError,
 		ssr: { nonce: getGlobalStartContext()?.cspNonce },
 	});
 }
