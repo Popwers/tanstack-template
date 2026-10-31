@@ -32,18 +32,21 @@ function SignIn() {
 		}
 		const form = new FormData(event.currentTarget);
 		setIsPending(true);
-		const result = await signIn.email({
-			email: formText(form, 'email'),
-			password: formText(form, 'password'),
-			fetchOptions,
-		});
-		captcha.reset();
-		setIsPending(false);
-		if (result.error) {
-			setError(result.error.message ?? 'Connexion impossible.');
-			return;
+		try {
+			const result = await signIn.email({
+				email: formText(form, 'email'),
+				password: formText(form, 'password'),
+				fetchOptions,
+			});
+			if (result.error) {
+				setError(result.error.message ?? 'Connexion impossible.');
+				return;
+			}
+			await navigate({ to: '/dashboard' });
+		} finally {
+			captcha.reset();
+			setIsPending(false);
 		}
-		await navigate({ to: '/dashboard' });
 	}
 
 	return (

@@ -30,8 +30,34 @@ export function edgeCachedUrls(appUrl: string): string[] {
 	return EDGE_CACHED_PATHS.map((path) => origin + path);
 }
 
+/** One purge call: its outcome is logged, a failure never reaches the caller. */
+async function purgeBatch(zone: PurgeZone, files: readonly string[], send: Send): Promise<void> {
+	try {
+		const response = await send(
+			`https://api.cloudflare.com/client/v4/zones/${encodeURIComponent(zone.zoneId)}/purge_cache`,
+			{
+				method: 'POST',
+				headers: { authorization: `Bearer ${zone.apiToken}`, 'content-type': 'application/json' },
+				body: JSON.stringify({ files }),
+				signal: AbortSignal.timeout(10_000),
+			},
+		);
+		if (response.ok) {
+			console.info(`[edge-cache] purged ${files.length} URL(s)`);
+		} else {
+			console.error(
+				`[edge-cache] purge of ${files.length} URL(s) refused (${response.status}):`,
+				(await response.text()).slice(0, 300),
+			);
+		}
+	} catch (error) {
+		console.error(`[edge-cache] purge of ${files.length} URL(s) failed:`, error);
+	}
+}
+
 /**
- * Ask Cloudflare to drop these URLs from the zone's cache, 30 per call.
+ * Ask Cloudflare to drop these URLs from the zone's cache, 30 per call. The calls are independent
+ * and go out together: one that fails does not hold back the others.
  * @param zone - The zone and its purge token.
  * @param urls - Absolute URLs.
  * @param send - `fetch`, replaced in tests.
@@ -42,30 +68,11 @@ export async function purgeCloudflareUrls(
 	send: Send = fetch,
 ): Promise<void> {
 	const unique = [...new Set(urls)];
+	const batches: string[][] = [];
 	for (let start = 0; start < unique.length; start += URLS_PER_PURGE) {
-		const files = unique.slice(start, start + URLS_PER_PURGE);
-		try {
-			const response = await send(
-				`https://api.cloudflare.com/client/v4/zones/${encodeURIComponent(zone.zoneId)}/purge_cache`,
-				{
-					method: 'POST',
-					headers: { authorization: `Bearer ${zone.apiToken}`, 'content-type': 'application/json' },
-					body: JSON.stringify({ files }),
-					signal: AbortSignal.timeout(10_000),
-				},
-			);
-			if (response.ok) {
-				console.info(`[edge-cache] purged ${files.length} URL(s)`);
-			} else {
-				console.error(
-					`[edge-cache] purge of ${files.length} URL(s) refused (${response.status}):`,
-					(await response.text()).slice(0, 300),
-				);
-			}
-		} catch (error) {
-			console.error(`[edge-cache] purge of ${files.length} URL(s) failed:`, error);
-		}
+		batches.push(unique.slice(start, start + URLS_PER_PURGE));
 	}
+	await Promise.all(batches.map((files) => purgeBatch(zone, files, send)));
 }
 
 /** How the post-deploy purge waits for the new server. */

@@ -293,6 +293,7 @@ export default defineConfig({
 
 	staged: {
 		'*.{js,jsx,ts,tsx,json,css,html}': 'bun --bun vp check --fix',
+		'*.{js,jsx,ts,tsx}': 'react-doctor --no-telemetry --no-supply-chain --blocking warning',
 	},
 
 	test: {

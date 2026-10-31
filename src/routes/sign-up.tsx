@@ -31,20 +31,24 @@ function SignUp() {
 		}
 		const form = new FormData(event.currentTarget);
 		setState('pending');
-		const result = await signUp.email({
-			name: formText(form, 'name'),
-			email: formText(form, 'email'),
-			password: formText(form, 'password'),
-			callbackURL: '/dashboard',
-			fetchOptions,
-		});
-		captcha.reset();
-		if (result.error) {
-			setError(result.error.message ?? 'Inscription impossible.');
-			setState('idle');
-			return;
+		try {
+			const result = await signUp.email({
+				name: formText(form, 'name'),
+				email: formText(form, 'email'),
+				password: formText(form, 'password'),
+				callbackURL: '/dashboard',
+				fetchOptions,
+			});
+			if (result.error) {
+				setError(result.error.message ?? 'Inscription impossible.');
+				return;
+			}
+			setState('sent');
+		} finally {
+			captcha.reset();
+			// Only a submit that did not end in 'sent' goes back to the form.
+			setState((current) => (current === 'pending' ? 'idle' : current));
 		}
-		setState('sent');
 	}
 
 	if (state === 'sent') {
