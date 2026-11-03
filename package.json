@@ -12,7 +12,7 @@
     "build": "bun --bun vp build",
     "preview": "vp preview",
     "start": "bun .output/server/index.mjs",
-    "check": "bun --bun vp check && bun check --no-script",
+    "check": "bun --bun vp check",
     "test": "vp test run",
     "test:e2e": "e2e run",
     "test:e2e:ci": "e2e run --exclude-tag agent --reporter list,junit",

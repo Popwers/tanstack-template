@@ -31,9 +31,6 @@ Type `make` (the Makefile puts `./node_modules/.bin` first, so the repo's Vite+ 
   `cn`. Fix every `shadcn/*` and `anti-slop/*` lint error; never suppress.
 - **Tests**: e2e first (`tests/e2e/*.e2e.ts`, tag agent tests `agent`). Vitest only for logic e2e cannot
   reach cheaply; list the failure modes first.
-- **Type check**: `bun check --no-script`. `vp check` no longer type-checks (`typeCheck: false`), and
-  without `--no-script` `bun check` runs the `check` script again. `make check`, `make verify` and the
-  pre-commit hook run both.
 - **Test state**: test files share a worker (`isolate: false`). `tests/support/setup.ts` runs after each
   file and resets real timers, mocks, global and env stubs, the cached parsed env (`resetEnvCache`) and
   the module registry. A test still restores what that does not cover: `process.env` written directly

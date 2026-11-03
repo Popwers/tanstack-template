@@ -29,13 +29,11 @@ hooks: ## (Re)install Git hooks (vp config)
 	@vp config >/dev/null
 	@echo "Hooks installed (.vite-hooks/: pre-commit vp staged, pre-push verify + e2e)"
 
-check: ## lint + fmt (vp check), then typecheck (bun check)
+check: ## lint + fmt + typecheck
 	@vp check
-	@bun check --no-script
 
-fix: ## Auto-fix lint + fmt, then typecheck
+fix: ## Auto-fix lint + fmt
 	@vp check --fix
-	@bun check --no-script
 
 dev: ## Postgres + Mailpit (docker), migrations, then the dev server on :3000
 	@docker compose up -d --wait
@@ -55,7 +53,7 @@ e2e: ## e2e golden paths (builds, throwaway Postgres on :5439, app on :3011)
 	@vp run test:e2e
 
 verify: ## Full gate: check + tests + build (the pre-push hook runs it)
-	@$(MAKE) check
+	@vp check
 	@vp test run
 	@vp run build
 
