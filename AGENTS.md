@@ -31,4 +31,10 @@ Type `make` (the Makefile puts `./node_modules/.bin` first, so the repo's Vite+ 
   `cn`. Fix every `shadcn/*` and `anti-slop/*` lint error; never suppress.
 - **Tests**: e2e first (`tests/e2e/*.e2e.ts`, tag agent tests `agent`). Vitest only for logic e2e cannot
   reach cheaply; list the failure modes first.
+- **Test state**: test files share a worker (`isolate: false`). `tests/support/setup.ts` runs after each
+  file and resets real timers, mocks, global and env stubs, the cached parsed env (`resetEnvCache`) and
+  the module registry. A test still restores what that does not cover: `process.env` written directly
+  instead of `vi.stubEnv`, globals assigned instead of `vi.stubGlobal`, module-level caches other than
+  the env (add a reset helper next to the cache and call it from the setup file), rendered DOM trees (a
+  DOM test unmounts them and empties `document.body`), and any server, pool or container it opens.
 - **Versions**: exact or caret ranges, never `latest`. Conventional commits.
