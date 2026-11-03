@@ -302,6 +302,8 @@ export default defineConfig({
 		include: ['tests/**/*.test.{ts,tsx}'],
 		clearMocks: true,
 		restoreMocks: true,
+		// One worker serves several files; tests/support/setup.ts resets what a file leaves behind.
 		isolate: false,
+		setupFiles: ['tests/support/setup.ts'],
 	},
 });
