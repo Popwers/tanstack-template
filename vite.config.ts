@@ -154,7 +154,8 @@ const lint: OxlintConfig = {
 	],
 	options: {
 		typeAware: true,
-		typeCheck: true,
+		// Type checking runs in `bun check --no-script` (package.json `check`, Makefile, staged hook).
+		typeCheck: false,
 	},
 	rules: {
 		'no-param-reassign': 'error',
@@ -292,7 +293,9 @@ export default defineConfig({
 	},
 
 	staged: {
-		'*.{js,jsx,ts,tsx,json,css,html}': 'bun --bun vp check --fix',
+		'*.{js,jsx,ts,tsx,json,css,html}': ['bun --bun vp check --fix'],
+		// A function ignores the file list: the type check covers the whole project, not the staged files.
+		'*.{ts,tsx}': [() => 'bun check --no-script'],
 		'*.{js,jsx,ts,tsx}': 'react-doctor --no-telemetry --no-supply-chain --blocking warning',
 	},
 

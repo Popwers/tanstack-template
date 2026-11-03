@@ -30,7 +30,7 @@ Then:
 | --- | --- |
 | `make init` | First run (idempotent) |
 | `make dev` | Postgres + Mailpit, migrations, dev server on :3000 |
-| `make check` / `make fix` | Lint + fmt + typecheck (`vp check`) / auto-fix |
+| `make check` / `make fix` | Lint + fmt (`vp check`), then typecheck (`bun check --no-script`) / auto-fix |
 | `make test` | Vitest (`vp test`) |
 | `make e2e` | Golden paths against the production build, throwaway Postgres on :5439 |
 | `make verify` | Check + tests + build |
@@ -42,7 +42,7 @@ Then:
 ## Git hooks
 
 `make init` / `make install` run `vp config`, which points Git at `.vite-hooks/`. Pre-commit runs
-`vp staged`. Pre-push runs `make verify`, then `vp run test:e2e:ci` when app paths changed; a push
+`vp staged` (`vp check --fix`, then `bun check --no-script`). Pre-push runs `make verify`, then `vp run test:e2e:ci` when app paths changed; a push
 touching only docs skips the gate. No workflow runs tests: GitHub Actions only releases. From a git
 worktree, push with `git -c core.hooksPath="$PWD/.vite-hooks/_" push` so the gate runs.
 
