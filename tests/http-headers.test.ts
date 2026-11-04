@@ -18,7 +18,8 @@ import { robotsTxt, sitemapXml } from '#/lib/seo';
  * - an app page gets CDN-Cache-Control at all, or a public page never gets it;
  * - a 404 under /assets/ is marked immutable;
  * - a route's own cache choice (robots.txt, sitemap.xml) is overwritten;
- * - the sitemap lists an app page, or robots.txt leaves the app open or omits the sitemap;
+ * - the sitemap lists an app page, or robots.txt leaves the app open, omits the sitemap, or loses
+ *   the freeloading-crawler group or names an allowed bot;
  * - the CSP lets an inline script run without the nonce, blocks Turnstile's script or iframe, drops
  *   an analytics or Sentry origin, or lets another site frame the app.
  */
@@ -132,10 +133,13 @@ describe('crawler files', () => {
 		]);
 	});
 
-	it('closes the app and the API, and announces the sitemap', () => {
+	it('closes the app, the API and the freeloading crawlers, and announces the sitemap', () => {
 		const robots = robotsTxt('https://example.com');
 		for (const path of ['/api/', '/dashboard', '/reset-password'])
 			expect(robots).toContain(`Disallow: ${path}`);
+		expect(robots).toContain('User-agent: Bytespider\nUser-agent: CCBot\n');
+		expect(robots).toContain('User-agent: AwarioBot\nDisallow: /\n\nSitemap:');
+		expect(robots).not.toContain('User-agent: GPTBot');
 		expect(robots).toContain('Sitemap: https://example.com/sitemap.xml');
 	});
 });
