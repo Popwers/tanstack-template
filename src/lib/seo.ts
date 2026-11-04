@@ -11,11 +11,26 @@ const DISALLOWED = [
 	'/reset-password',
 ];
 
+/**
+ * AI training and SEO-tool crawlers that take content and send no visitor back, so robots.txt closes them.
+ * Search, AI-answer, assistant and link-preview bots are not named: they follow the `*` group.
+ */
+export const FREELOADING_CRAWLERS = [
+	'Bytespider',
+	'CCBot',
+	'meta-externalagent',
+	'Reflectionbot',
+	'Barkrowler',
+	'SERankingBacklinksBot',
+	'AwarioBot',
+];
+
 /** A day for browsers and Cloudflare alike: these files change with a deploy only. */
 export const SEO_FILE_CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400';
 
 /**
- * robots.txt: every public page open, the app and the API closed, the sitemap announced.
+ * robots.txt: every public page open, the app and the API closed, freeloading crawlers closed, the
+ * sitemap announced.
  * @param appUrl - Canonical origin, without a trailing slash.
  * @returns The file's text.
  */
@@ -24,6 +39,10 @@ export function robotsTxt(appUrl: string): string {
 		'User-agent: *',
 		'Allow: /',
 		...DISALLOWED.map((path) => `Disallow: ${path}`),
+		'',
+		'# AI training and SEO-tool crawlers that send no visitor back.',
+		...FREELOADING_CRAWLERS.map((bot) => `User-agent: ${bot}`),
+		'Disallow: /',
 		'',
 		`Sitemap: ${appUrl}/sitemap.xml`,
 		'',
