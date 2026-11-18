@@ -25,3 +25,4 @@ tsconfig.tsbuildinfo
 
 # e2e
 .e2e/
+.vitest/
