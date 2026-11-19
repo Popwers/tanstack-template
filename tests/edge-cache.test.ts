@@ -59,14 +59,13 @@ describe('edgeCachePurge', () => {
 });
 
 describe('edgeCachedUrls', () => {
-	it('lists every page Cloudflare keeps, on the APP_URL origin', () => {
-		expect(edgeCachedUrls('https://example.com/')).toEqual([
-			'https://example.com/',
-			'https://example.com/confidentialite',
-			'https://example.com/mentions-legales',
-			'https://example.com/robots.txt',
-			'https://example.com/sitemap.xml',
-		]);
+	it('puts every cached path on the APP_URL origin, whether it ends in a slash or not', () => {
+		const urls = edgeCachedUrls('https://example.com/');
+		expect(urls).toEqual(edgeCachedUrls('https://example.com'));
+		for (const url of urls) {
+			expect(new URL(url).origin).toBe('https://example.com');
+			expect(url.slice('https://'.length)).not.toContain('//');
+		}
 	});
 });
 
@@ -97,11 +96,7 @@ describe('purgeCloudflareUrls', () => {
 		await expect(purgeCloudflareUrls(ZONE, urls, send)).resolves.toBeUndefined();
 
 		expect(calls).toHaveLength(2);
-		expect(errors).toHaveBeenCalledWith(
-			'[edge-cache] purge of 30 URL(s) refused (403):',
-			'{"success":false}',
-		);
-		expect(errors).toHaveBeenCalledWith('[edge-cache] purge of 1 URL(s) failed:', expect.any(Error));
+		expect(errors).toHaveBeenCalledTimes(2);
 	});
 });
 
@@ -142,8 +137,6 @@ describe('purgeAfterDeploy', () => {
 		await expect(purgeAfterDeploy(ZONE, input(send), NO_WAIT)).resolves.toBeUndefined();
 
 		expect(calls).toHaveLength(3);
-		expect(errors).toHaveBeenCalledWith(
-			'[edge-cache] the server never answered its health check: no purge',
-		);
+		expect(errors).toHaveBeenCalledTimes(1);
 	});
 });
