@@ -70,7 +70,9 @@ test('an auth call without a Turnstile token is refused', async () => {
 test('crawlers get robots.txt and a sitemap of the public pages', async () => {
 	const robots = await fetch(`${E2E_BASE_URL}/robots.txt`);
 	expect(robots.status).toBe(200);
-	expect(await robots.text()).toContain(`Sitemap: ${E2E_BASE_URL}/sitemap.xml`);
+	const robotsText = await robots.text();
+	expect(robotsText).toContain(`Sitemap: ${E2E_BASE_URL}/sitemap.xml`);
+	expect(robotsText).toContain('Disallow: /dashboard');
 
 	const sitemap = await fetch(`${E2E_BASE_URL}/sitemap.xml`);
 	expect(sitemap.status).toBe(200);

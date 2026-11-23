@@ -15,7 +15,7 @@ const DISALLOWED = [
  * AI training and SEO-tool crawlers that take content and send no visitor back, so robots.txt closes them.
  * Search, AI-answer, assistant and link-preview bots are not named: they follow the `*` group.
  */
-export const FREELOADING_CRAWLERS = [
+const FREELOADING_CRAWLERS = [
 	'Bytespider',
 	'CCBot',
 	'meta-externalagent',
