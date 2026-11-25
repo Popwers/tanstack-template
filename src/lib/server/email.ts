@@ -59,8 +59,19 @@ export async function sendEmail(email: OutgoingEmail): Promise<EmailTransport> {
 	return 'outbox';
 }
 
+/** @returns `value` as HTML text or attribute content: markup in it is shown, never interpreted. */
+function escapeHtml(value: string): string {
+	return value
+		.replaceAll('&', '&amp;')
+		.replaceAll('<', '&lt;')
+		.replaceAll('>', '&gt;')
+		.replaceAll('"', '&quot;')
+		.replaceAll("'", '&#39;');
+}
+
 /**
- * Minimal branded layout for the auth e-mails.
+ * Minimal branded layout for the auth e-mails. Every value is escaped in the HTML part, so text that
+ * comes from a user (a name) can be passed as is.
  * @param title - Heading.
  * @param body - One paragraph of text.
  * @param action - Button label and URL.
@@ -71,9 +82,10 @@ export function actionEmail(
 	body: string,
 	action: { label: string; url: string },
 ): Pick<OutgoingEmail, 'html' | 'text'> {
+	const htmlUrl = escapeHtml(action.url);
 	const html = `<!doctype html><html lang="fr"><body style="font-family:system-ui,sans-serif;max-width:520px;margin:auto;padding:24px">
-<h1 style="font-size:20px">${title}</h1><p>${body}</p>
-<p><a href="${action.url}" style="display:inline-block;background:#111;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">${action.label}</a></p>
-<p style="color:#666;font-size:12px">Si le bouton ne fonctionne pas : ${action.url}</p></body></html>`;
+<h1 style="font-size:20px">${escapeHtml(title)}</h1><p>${escapeHtml(body)}</p>
+<p><a href="${htmlUrl}" style="display:inline-block;background:#111;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">${escapeHtml(action.label)}</a></p>
+<p style="color:#666;font-size:12px">Si le bouton ne fonctionne pas : ${htmlUrl}</p></body></html>`;
 	return { html, text: `${title}\n\n${body}\n\n${action.label} : ${action.url}` };
 }
