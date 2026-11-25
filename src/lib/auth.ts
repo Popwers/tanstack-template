@@ -4,6 +4,7 @@ import { captcha } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 
 import { db, schema } from '#/lib/db';
+import { MIN_PASSWORD_LENGTH } from '#/lib/password-policy';
 import { SESSION_RETENTION_DAYS } from '#/lib/retention';
 import { authIpAddressOptions } from '#/lib/server/client-ip';
 import { actionEmail, sendEmail } from '#/lib/server/email';
@@ -88,7 +89,7 @@ export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true,
 		requireEmailVerification: true,
-		minPasswordLength: 10,
+		minPasswordLength: MIN_PASSWORD_LENGTH,
 		// A reset means the old password may be known to someone else: every other session ends.
 		revokeSessionsOnPasswordReset: true,
 		sendResetPassword: async ({ user, url }) => {

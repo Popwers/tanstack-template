@@ -8,6 +8,7 @@ import { Button } from '#/components/ui/button';
 import { usePublicConfig } from '#/hooks/use-public-config';
 import { signUp } from '#/lib/auth-client';
 import { formText } from '#/lib/form';
+import { MIN_PASSWORD_LENGTH } from '#/lib/password-policy';
 
 export const Route = createFileRoute('/sign-up')({
 	head: () => ({ meta: [{ title: 'Créer un compte' }] }),
@@ -65,12 +66,13 @@ function SignUp() {
 		<AuthCard title='Créer un compte' description='Quelques secondes suffisent.'>
 			<form onSubmit={onSubmit} className='grid gap-4'>
 				<FormField id='name' label='Nom' type='text' autoComplete='name' />
-				<FormField id='email' label='E-mail' type='email' autoComplete='email' />
+				<FormField id='email' label='E-mail' type='email' autoComplete='username' />
 				<FormField
 					id='password'
-					label='Mot de passe (10 caractères min.)'
+					label={`Mot de passe (${MIN_PASSWORD_LENGTH} caractères min.)`}
 					type='password'
 					autoComplete='new-password'
+					minLength={MIN_PASSWORD_LENGTH}
 				/>
 				{captcha.widget}
 				{error !== null && (
