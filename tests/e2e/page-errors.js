@@ -1,8 +1,10 @@
-// Init script (`e2e.config.ts` `initScripts`): records page failures in sessionStorage, so they
-// survive navigations until `fixtures.ts` reads them after the test. It records `console.error`,
-// uncaught errors and rejections, same-origin element load failures, same-origin HTTP >= 400
-// responses and CSP violations (what Chromium logs as console errors under Playwright), with the
-// call stack of any Error among them.
+/**
+ * Init script (`e2e.config.ts` `initScripts`): records page failures in sessionStorage, so they
+ * survive navigations until `fixtures.ts` reads them after the test. It records `console.error`,
+ * uncaught errors and rejections, same-origin element load failures, same-origin HTTP >= 400
+ * responses and CSP violations (what Chromium logs as console errors under Playwright), with the
+ * call stack of any Error among them.
+ */
 (() => {
 	const key = '__e2ePageErrors';
 	// The call stack of an Error, on the lines after the message, so the report shows its origin.

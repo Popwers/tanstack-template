@@ -3,7 +3,6 @@ import { sql } from 'drizzle-orm';
 
 import { db } from '#/lib/db';
 
-/** JSON response helper. */
 function json(body: { status: string; db: string }, status: number): Response {
 	return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }

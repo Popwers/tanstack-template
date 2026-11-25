@@ -29,6 +29,7 @@ const sentryOrg = (process.env.SENTRY_ORG || 'mystudiodigital').trim();
 const sentryProject = (process.env.SENTRY_PROJECT || '').trim();
 
 const hasShadcnLint = existsSync('node_modules/@shadcn/lint');
+const hasNoComments = existsSync('tools/oxlint/no-comments/index.ts');
 
 function shadcnLintRules(): DummyRuleMap {
 	if (!hasShadcnLint) {
@@ -42,6 +43,25 @@ function shadcnLintRules(): DummyRuleMap {
 		'shadcn/no-inline-styles': 'error',
 		'shadcn/no-unknown-classes': 'error',
 		'shadcn/require-static-classes': 'error',
+	};
+}
+
+/** Comment policy (vendored `tools/oxlint/no-comments`): on only when the plugin is in the repo. */
+function noCommentsRules(): DummyRuleMap {
+	if (!hasNoComments) {
+		return {};
+	}
+
+	return {
+		'no-comments/english-only': 'error',
+		'no-comments/no-caller-lists': 'error',
+		'no-comments/no-commented-out-code': 'error',
+		'no-comments/no-narration': 'error',
+		'no-comments/no-restated-names': 'error',
+		'no-comments/no-stacked-line-comments': 'error',
+		'no-comments/no-ticket-ids': 'error',
+		'no-comments/no-unexplained-suppressions': 'error',
+		'no-comments/no-unlinked-constraints': 'error',
 	};
 }
 
@@ -79,6 +99,7 @@ const AGENT_IGNORES = [
 	'.serena/**',
 	'.windsurf/**',
 	'tools/oxlint/anti-slop/**',
+	'tools/oxlint/no-comments/**',
 ];
 
 /** Generated output. */
@@ -150,6 +171,7 @@ const lint: OxlintConfig = {
 	// Vendored anti-slop (https://github.com/dmmulroy/anti-slop). @shadcn/lint loads only when installed.
 	jsPlugins: [
 		{ name: 'anti-slop', specifier: './tools/oxlint/anti-slop/index.ts' },
+		...(hasNoComments ? [{ name: 'no-comments', specifier: './tools/oxlint/no-comments/index.ts' }] : []),
 		...(hasShadcnLint ? ['@shadcn/lint'] : []),
 	],
 	options: {
@@ -180,6 +202,7 @@ const lint: OxlintConfig = {
 		'anti-slop/no-unsafe-dictionary-type': 'error',
 		'anti-slop/no-widen-then-assert': 'error',
 		'anti-slop/require-safety-comment-for-type-assertion': 'error',
+		...noCommentsRules(),
 		...shadcnLintRules(),
 	},
 	overrides: [
