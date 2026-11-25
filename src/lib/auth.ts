@@ -45,6 +45,16 @@ function resolveAuthSecret(): string {
 }
 
 /**
+ * Better Auth's deferred work (the auth e-mails) runs after the response. Awaited, the mail round-trip
+ * made sign-up and the reset request answer slower for one kind of address, which told an attacker
+ * whether it has an account. The server is a long-lived process, so the promise outlives the response.
+ * @param task - The deferred work.
+ */
+function runAfterResponse(task: Promise<unknown>): void {
+	task.catch((error) => console.error('[auth] background task failed:', error));
+}
+
+/**
  * Turnstile check on {@link CAPTCHA_ENDPOINTS}: 400 without a token, 403 for a rejected one, and 500 when
  * siteverify is unreachable, which `/api/auth/$` turns into 503.
  */
@@ -74,7 +84,7 @@ export const auth = betterAuth({
 		max: 100,
 		customRules: authRateLimitRules(env().NODE_ENV === 'test'),
 	},
-	advanced: { ipAddress: authIpAddressOptions },
+	advanced: { ipAddress: authIpAddressOptions, backgroundTasks: { handler: runAfterResponse } },
 	emailAndPassword: {
 		enabled: true,
 		requireEmailVerification: true,
