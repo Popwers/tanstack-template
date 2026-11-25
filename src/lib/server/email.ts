@@ -16,21 +16,23 @@ export interface OutgoingEmail {
 /** Where an e-mail went. */
 export type EmailTransport = 'resend' | 'mailpit' | 'outbox';
 
+/** A transport that has not answered by then is treated as down, so a send never hangs forever. */
+const SEND_TIMEOUT_MS = 10_000;
+
 /**
  * Send an e-mail. Priority: Resend (`RESEND_API_KEY`) → Mailpit (`MAILPIT_URL`, local dev) →
  * a JSON file in `{STORAGE_DIR}/_outbox` (tests, e2e), so every environment works without an account.
  * @param email - The message.
  * @returns The transport used.
- * @throws Error when Resend or Mailpit refuses the message.
+ * @throws Error when Resend or Mailpit refuses the message or does not answer within 10 s.
  */
 export async function sendEmail(email: OutgoingEmail): Promise<EmailTransport> {
 	const { RESEND_API_KEY, MAILPIT_URL, EMAIL_FROM, EMAIL_REPLY_TO, STORAGE_DIR } = env();
 	if (RESEND_API_KEY) {
-		const { error } = await new Resend(RESEND_API_KEY).emails.send({
-			from: EMAIL_FROM,
-			replyTo: EMAIL_REPLY_TO,
-			...email,
-		});
+		const { error } = await new Resend(RESEND_API_KEY).emails.send(
+			{ from: EMAIL_FROM, replyTo: EMAIL_REPLY_TO, ...email },
+			{ signal: AbortSignal.timeout(SEND_TIMEOUT_MS) },
+		);
 		if (error) throw new Error(`RESEND_FAILED: ${error.message}`);
 		return 'resend';
 	}
@@ -45,6 +47,7 @@ export async function sendEmail(email: OutgoingEmail): Promise<EmailTransport> {
 				HTML: email.html,
 				Text: email.text,
 			}),
+			signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
 		});
 		if (!response.ok) throw new Error(`MAILPIT_FAILED: ${response.status}`);
 		return 'mailpit';
