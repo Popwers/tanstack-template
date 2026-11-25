@@ -236,6 +236,8 @@ function packageOf(id: string): string | undefined {
  * @returns The vendor chunk name, or `undefined` for app code.
  */
 function vendorChunkName(id: string): string | undefined {
+	// A `?url` import is one string (a file in a package): a chunk of its own would cost a request.
+	if (id.endsWith('?url')) return undefined;
 	const pkg = packageOf(id);
 	if (pkg === undefined) return undefined;
 	return `vendor-${pkg.replace('@', '').replaceAll('/', '-')}`;

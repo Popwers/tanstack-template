@@ -1,4 +1,6 @@
 /// <reference types="vite/client" />
+
+import interLatinFont from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url';
 import { createRootRoute, HeadContent, Link, Outlet, Scripts } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
@@ -43,6 +45,14 @@ export const Route = createRootRoute({
 			],
 			links: [
 				{ rel: 'stylesheet', href: appCss },
+				// The latin file of Inter's `@font-face` (the one French text uses): requested with the stylesheet, not after it.
+				{
+					rel: 'preload',
+					href: interLatinFont,
+					as: 'font',
+					type: 'font/woff2',
+					crossOrigin: 'anonymous',
+				},
 				{ rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
 				...(pageUrl === undefined ? [] : [{ rel: 'canonical', href: pageUrl }]),
 			],
