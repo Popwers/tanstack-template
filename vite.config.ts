@@ -290,7 +290,8 @@ const plugins: PluginOption[] = isTest
 export default defineConfig({
 	resolve: { tsconfigPaths: true },
 	plugins,
-	server: { host: '0.0.0.0', port: 3000 },
+	// Loopback only: the dev server serves the sources. `vp dev --host` opens it to the LAN (a phone test).
+	server: { host: '127.0.0.1', port: 3000 },
 	preview: { host: '127.0.0.1' },
 
 	fmt,
