@@ -6,6 +6,7 @@ import { tanstackStartCookies } from 'better-auth/tanstack-start';
 import { db, schema } from '#/lib/db';
 import { MIN_PASSWORD_LENGTH } from '#/lib/password-policy';
 import { SESSION_RETENTION_DAYS } from '#/lib/retention';
+import { runInBackground } from '#/lib/server/background';
 import { authIpAddressOptions } from '#/lib/server/client-ip';
 import { actionEmail, sendEmail } from '#/lib/server/email';
 import { env, isPrerendering } from '#/lib/server/env';
@@ -48,11 +49,11 @@ function resolveAuthSecret(): string {
 /**
  * Better Auth's deferred work (the auth e-mails) runs after the response. Awaited, the mail round-trip
  * made sign-up and the reset request answer slower for one kind of address, which told an attacker
- * whether it has an account. The server is a long-lived process, so the promise outlives the response.
+ * whether it has an account. Tracked, so a shutdown waits for a send still running.
  * @param task - The deferred work.
  */
 function runAfterResponse(task: Promise<unknown>): void {
-	task.catch((error) => console.error('[auth] background task failed:', error));
+	runInBackground('auth', task);
 }
 
 /**

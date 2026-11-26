@@ -250,7 +250,10 @@ const plugins: PluginOption[] = isTest
 			nitro({
 				preset: process.env.NITRO_PRESET || 'bun',
 				compressPublicAssets: { gzip: true, brotli: true },
-				plugins: [fileURLToPath(new URL('src/server/plugins/purge-edge-cache.ts', import.meta.url))],
+				plugins: [
+					fileURLToPath(new URL('src/server/plugins/purge-edge-cache.ts', import.meta.url)),
+					fileURLToPath(new URL('src/server/plugins/shutdown.ts', import.meta.url)),
+				],
 				// Daily jobs run in the server process, 02:30 UTC. Every instance runs them: the deletes are idempotent.
 				experimental: { tasks: true },
 				tasks: {
