@@ -37,7 +37,7 @@ RUN bun run build \
 	&& find .output -type f -name '*.map' -delete \
 	&& bun build scripts/migrate.ts --target bun --outfile dist-scripts/migrate.mjs
 
-FROM popwers/mini-bun:latest AS runner
+FROM popwers/mini-bun:v${BUN_VERSION} AS runner
 WORKDIR /home/bun/app
 ENV NODE_ENV=production \
 	PORT=3000 \

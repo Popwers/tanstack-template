@@ -29,6 +29,7 @@ const sentryOrg = (process.env.SENTRY_ORG || 'mystudiodigital').trim();
 const sentryProject = (process.env.SENTRY_PROJECT || '').trim();
 
 const hasShadcnLint = existsSync('node_modules/@shadcn/lint');
+const hasNoComments = existsSync('tools/oxlint/no-comments/index.ts');
 
 function shadcnLintRules(): DummyRuleMap {
 	if (!hasShadcnLint) {
@@ -42,6 +43,25 @@ function shadcnLintRules(): DummyRuleMap {
 		'shadcn/no-inline-styles': 'error',
 		'shadcn/no-unknown-classes': 'error',
 		'shadcn/require-static-classes': 'error',
+	};
+}
+
+/** Comment policy (vendored `tools/oxlint/no-comments`): on only when the plugin is in the repo. */
+function noCommentsRules(): DummyRuleMap {
+	if (!hasNoComments) {
+		return {};
+	}
+
+	return {
+		'no-comments/english-only': 'error',
+		'no-comments/no-caller-lists': 'error',
+		'no-comments/no-commented-out-code': 'error',
+		'no-comments/no-narration': 'error',
+		'no-comments/no-restated-names': 'error',
+		'no-comments/no-stacked-line-comments': 'error',
+		'no-comments/no-ticket-ids': 'error',
+		'no-comments/no-unexplained-suppressions': 'error',
+		'no-comments/no-unlinked-constraints': 'error',
 	};
 }
 
@@ -79,6 +99,7 @@ const AGENT_IGNORES = [
 	'.serena/**',
 	'.windsurf/**',
 	'tools/oxlint/anti-slop/**',
+	'tools/oxlint/no-comments/**',
 ];
 
 /** Generated output. */
@@ -150,6 +171,7 @@ const lint: OxlintConfig = {
 	// Vendored anti-slop (https://github.com/dmmulroy/anti-slop). @shadcn/lint loads only when installed.
 	jsPlugins: [
 		{ name: 'anti-slop', specifier: './tools/oxlint/anti-slop/index.ts' },
+		...(hasNoComments ? [{ name: 'no-comments', specifier: './tools/oxlint/no-comments/index.ts' }] : []),
 		...(hasShadcnLint ? ['@shadcn/lint'] : []),
 	],
 	options: {
@@ -180,6 +202,7 @@ const lint: OxlintConfig = {
 		'anti-slop/no-unsafe-dictionary-type': 'error',
 		'anti-slop/no-widen-then-assert': 'error',
 		'anti-slop/require-safety-comment-for-type-assertion': 'error',
+		...noCommentsRules(),
 		...shadcnLintRules(),
 	},
 	overrides: [
@@ -213,6 +236,8 @@ function packageOf(id: string): string | undefined {
  * @returns The vendor chunk name, or `undefined` for app code.
  */
 function vendorChunkName(id: string): string | undefined {
+	// A `?url` import is one string (a file in a package): a chunk of its own would cost a request.
+	if (id.endsWith('?url')) return undefined;
 	const pkg = packageOf(id);
 	if (pkg === undefined) return undefined;
 	return `vendor-${pkg.replace('@', '').replaceAll('/', '-')}`;
@@ -225,7 +250,10 @@ const plugins: PluginOption[] = isTest
 			nitro({
 				preset: process.env.NITRO_PRESET || 'bun',
 				compressPublicAssets: { gzip: true, brotli: true },
-				plugins: [fileURLToPath(new URL('src/server/plugins/purge-edge-cache.ts', import.meta.url))],
+				plugins: [
+					fileURLToPath(new URL('src/server/plugins/purge-edge-cache.ts', import.meta.url)),
+					fileURLToPath(new URL('src/server/plugins/shutdown.ts', import.meta.url)),
+				],
 				// Daily jobs run in the server process, 02:30 UTC. Every instance runs them: the deletes are idempotent.
 				experimental: { tasks: true },
 				tasks: {
@@ -262,7 +290,8 @@ const plugins: PluginOption[] = isTest
 export default defineConfig({
 	resolve: { tsconfigPaths: true },
 	plugins,
-	server: { host: '0.0.0.0', port: 3000 },
+	// Loopback only: the dev server serves the sources. `vp dev --host` opens it to the LAN (a phone test).
+	server: { host: '127.0.0.1', port: 3000 },
 	preview: { host: '127.0.0.1' },
 
 	fmt,

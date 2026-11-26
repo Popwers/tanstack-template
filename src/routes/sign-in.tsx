@@ -52,7 +52,7 @@ function SignIn() {
 	return (
 		<AuthCard title='Se connecter' description='Accédez à votre espace.'>
 			<form onSubmit={onSubmit} className='grid gap-4'>
-				<FormField id='email' label='E-mail' type='email' autoComplete='email' />
+				<FormField id='email' label='E-mail' type='email' autoComplete='username' />
 				<FormField
 					id='password'
 					label='Mot de passe'

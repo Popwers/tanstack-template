@@ -4,7 +4,9 @@ import { captcha } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 
 import { db, schema } from '#/lib/db';
+import { MIN_PASSWORD_LENGTH } from '#/lib/password-policy';
 import { SESSION_RETENTION_DAYS } from '#/lib/retention';
+import { runInBackground } from '#/lib/server/background';
 import { authIpAddressOptions } from '#/lib/server/client-ip';
 import { actionEmail, sendEmail } from '#/lib/server/email';
 import { env, isPrerendering } from '#/lib/server/env';
@@ -45,6 +47,16 @@ function resolveAuthSecret(): string {
 }
 
 /**
+ * Better Auth's deferred work (the auth e-mails) runs after the response. Awaited, the mail round-trip
+ * made sign-up and the reset request answer slower for one kind of address, which told an attacker
+ * whether it has an account. Tracked, so a shutdown waits for a send still running.
+ * @param task - The deferred work.
+ */
+function runAfterResponse(task: Promise<unknown>): void {
+	runInBackground('auth', task);
+}
+
+/**
  * Turnstile check on {@link CAPTCHA_ENDPOINTS}: 400 without a token, 403 for a rejected one, and 500 when
  * siteverify is unreachable, which `/api/auth/$` turns into 503.
  */
@@ -74,11 +86,11 @@ export const auth = betterAuth({
 		max: 100,
 		customRules: authRateLimitRules(env().NODE_ENV === 'test'),
 	},
-	advanced: { ipAddress: authIpAddressOptions },
+	advanced: { ipAddress: authIpAddressOptions, backgroundTasks: { handler: runAfterResponse } },
 	emailAndPassword: {
 		enabled: true,
 		requireEmailVerification: true,
-		minPasswordLength: 10,
+		minPasswordLength: MIN_PASSWORD_LENGTH,
 		// A reset means the old password may be known to someone else: every other session ends.
 		revokeSessionsOnPasswordReset: true,
 		sendResetPassword: async ({ user, url }) => {

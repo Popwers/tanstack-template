@@ -49,7 +49,7 @@ export function useCaptcha(siteKey: string): Captcha {
 			<Turnstile
 				ref={ref}
 				siteKey={siteKey}
-				options={{ size: 'flexible', language: 'fr', appearance: 'interaction-only', theme: 'light' }}
+				options={{ size: 'flexible', language: 'fr', appearance: 'interaction-only', theme: 'auto' }}
 				scriptOptions={scriptOptions}
 				onSuccess={onSuccess}
 				onError={onFailure}

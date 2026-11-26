@@ -58,6 +58,20 @@ test('sign-up, e-mail verification, sign-out and sign-in reach the dashboard', a
 	await expect(browser).toHaveURL(/\/dashboard$/, { timeout: AUTH_WORK_MS });
 });
 
+test('a typed password can be shown to check it', async ({ app, screen }) => {
+	await app.open('/sign-in');
+	const password = screen.getByLabel('Mot de passe');
+	const toggle = screen.getByRole('button', 'Afficher le mot de passe');
+	await password.fill('e2e-password-123');
+
+	await toggle.tap();
+	await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+	await expect(password).toHaveValue('e2e-password-123');
+
+	await toggle.tap();
+	await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+});
+
 test('an auth call without a Turnstile token is refused', async () => {
 	const response = await fetch(`${E2E_BASE_URL}/api/auth/sign-in/email`, {
 		method: 'POST',
