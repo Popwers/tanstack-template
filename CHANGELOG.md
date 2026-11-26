@@ -1,3 +1,10 @@
+## [1.3.3](https://github.com/Popwers/tanstack-template/compare/v1.3.2...v1.3.3) (2026-11-26)
+
+
+### Bug Fixes
+
+* comments, modern web, security and performance pass ([#12](https://github.com/Popwers/tanstack-template/issues/12)) ([7181597](https://github.com/Popwers/tanstack-template/commit/71815979a0157ae5855516ebd7be628a18168bb2))
+
 ## [1.3.2](https://github.com/Popwers/tanstack-template/compare/v1.3.1...v1.3.2) (2026-10-30)
 
 
