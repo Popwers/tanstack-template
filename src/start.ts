@@ -1,6 +1,11 @@
 import { isNotFound, isRedirect } from '@tanstack/react-router';
 import { createCsrfMiddleware, createMiddleware, createStart } from '@tanstack/react-start';
 
+import { limitServerFunctionBody } from '#/lib/middleware/request-size';
+import {
+	answerMissingServerFunction,
+	reloadOnMissingServerFunction,
+} from '#/lib/middleware/stale-server-function';
 import { PublicError } from '#/lib/public-error';
 
 /** What the browser gets when a server function fails unexpectedly. */
@@ -36,8 +41,8 @@ const hideUnexpectedErrors = createMiddleware({ type: 'function' }).server(async
 });
 
 export const startInstance = createStart(() => ({
-	requestMiddleware: [csrfMiddleware],
-	functionMiddleware: [hideUnexpectedErrors],
+	requestMiddleware: [limitServerFunctionBody, csrfMiddleware, answerMissingServerFunction],
+	functionMiddleware: [reloadOnMissingServerFunction, hideUnexpectedErrors],
 }));
 
 declare module '@tanstack/react-start' {

@@ -1,39 +1,34 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 
-import { edgeCachedUrls, purgeAfterDeploy, purgeCloudflareUrls, type Send } from '#/lib/server/edge-cache';
+import { purgeEdgeHost, type Send } from '#/lib/server/edge-cache';
 import { edgeCachePurge, resetEnvCache } from '#/lib/server/env';
 
 /**
  * Failure modes covered:
- * - a page Cloudflare keeps is left out, or a URL doubles the slash of an APP_URL ending in one;
- * - more than 30 URLs go in one call and Cloudflare refuses them all;
+ * - the purge names a URL list instead of the hostname, so a page with a query string stays cached;
  * - a refused or failed call throws into the boot plugin and crashes the server;
- * - the purge runs before the new server serves, so the edge refetches the old pages;
- * - a server that never serves keeps probing forever;
  * - half the CLOUDFLARE_* pair turns the purge on with an undefined zone or token.
  */
 
 const ZONE = { kind: 'cloudflare', zoneId: 'zone_1', apiToken: 'token_1' } as const;
-const NO_WAIT = { probeIntervalMs: 0, probes: 3, switchGraceMs: 0 };
 
 interface SentCall {
 	url: string;
-	files: string[] | null;
+	body: { hosts: string[] };
 	authorization: string | null;
 }
 
 /** A stand-in for fetch: records each call, answers with what `answer` returns. */
-function fakeFetch(answer: (url: string) => Response | Promise<Response>) {
+function fakeFetch(answer: () => Response | Promise<Response>) {
 	const calls: SentCall[] = [];
 	const send: Send = async (input, init) => {
 		const request = new Request(input, init);
-		const body: { files: string[] } | null = request.method === 'POST' ? await request.json() : null;
 		calls.push({
 			url: request.url,
-			files: body?.files ?? null,
+			body: await request.json(),
 			authorization: request.headers.get('authorization'),
 		});
-		return answer(request.url);
+		return answer();
 	};
 	return { send, calls };
 }
@@ -58,85 +53,31 @@ describe('edgeCachePurge', () => {
 	});
 });
 
-describe('edgeCachedUrls', () => {
-	it('puts every cached path on the APP_URL origin, whether it ends in a slash or not', () => {
-		const urls = edgeCachedUrls('https://example.com/');
-		expect(urls).toEqual(edgeCachedUrls('https://example.com'));
-		for (const url of urls) {
-			expect(new URL(url).origin).toBe('https://example.com');
-			expect(url.slice('https://'.length)).not.toContain('//');
-		}
-	});
-});
-
-describe('purgeCloudflareUrls', () => {
-	it('sends at most 30 URLs per call, each once, with the zone token', async () => {
-		vi.spyOn(console, 'info').mockImplementation(() => {});
+describe('purgeEdgeHost', () => {
+	it('purges the hostname with the zone token', async () => {
+		const info = vi.spyOn(console, 'info').mockImplementation(() => {});
 		const { send, calls } = fakeFetch(() => Response.json({ success: true }));
-		const urls = Array.from({ length: 65 }, (_, index) => `https://example.com/p${index}`);
 
-		await purgeCloudflareUrls(ZONE, [...urls, urls[0] ?? ''], send);
+		expect(await purgeEdgeHost(ZONE, 'example.com', 'boot', send)).toBe('purged');
 
-		expect(calls.map((call) => call.files?.length)).toEqual([30, 30, 5]);
-		expect(calls.flatMap((call) => call.files)).toEqual(urls);
-		expect(calls[0]?.url).toBe('https://api.cloudflare.com/client/v4/zones/zone_1/purge_cache');
-		expect(calls[0]?.authorization).toBe('Bearer token_1');
-	});
-
-	it('logs a refused or failed call, never throws, and still sends the next batch', async () => {
-		const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
-		let call = 0;
-		const { send, calls } = fakeFetch(() => {
-			call += 1;
-			if (call === 1) return new Response('{"success":false}', { status: 403 });
-			throw new Error('network down');
-		});
-		const urls = Array.from({ length: 31 }, (_, index) => `https://example.com/p${index}`);
-
-		await expect(purgeCloudflareUrls(ZONE, urls, send)).resolves.toBeUndefined();
-
-		expect(calls).toHaveLength(2);
-		expect(errors).toHaveBeenCalledTimes(2);
-	});
-});
-
-describe('purgeAfterDeploy', () => {
-	const input = (send: Send) => ({
-		appUrl: 'https://example.com',
-		healthUrl: 'http://127.0.0.1:3000/api/health',
-		send,
-	});
-
-	it('purges the public pages only once the server answers its health check', async () => {
-		vi.spyOn(console, 'info').mockImplementation(() => {});
-		let probes = 0;
-		const { send, calls } = fakeFetch((url) => {
-			if (url.endsWith('/api/health')) {
-				probes += 1;
-				return new Response(null, { status: probes < 2 ? 503 : 200 });
-			}
-			return Response.json({ success: true });
-		});
-
-		await purgeAfterDeploy(ZONE, input(send), NO_WAIT);
-
-		expect(calls.map((call) => call.url)).toEqual([
-			'http://127.0.0.1:3000/api/health',
-			'http://127.0.0.1:3000/api/health',
-			'https://api.cloudflare.com/client/v4/zones/zone_1/purge_cache',
+		expect(calls).toEqual([
+			{
+				url: 'https://api.cloudflare.com/client/v4/zones/zone_1/purge_cache',
+				body: { hosts: ['example.com'] },
+				authorization: 'Bearer token_1',
+			},
 		]);
-		expect(calls[2]?.files).toEqual(edgeCachedUrls('https://example.com'));
+		expect(info).toHaveBeenCalledWith('[edge-cache] purged every cached page of example.com (boot)');
 	});
 
-	it('gives up without purging when the server never serves', async () => {
-		const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const { send, calls } = fakeFetch(() => {
-			throw new Error('connection refused');
-		});
-
-		await expect(purgeAfterDeploy(ZONE, input(send), NO_WAIT)).resolves.toBeUndefined();
-
-		expect(calls).toHaveLength(3);
-		expect(errors).toHaveBeenCalledTimes(1);
+	it('logs a refusal and an unreachable API without throwing', async () => {
+		const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const refused = fakeFetch(() => new Response('forbidden', { status: 403 }));
+		expect(await purgeEdgeHost(ZONE, 'example.com', 'boot', refused.send)).toBe('failed');
+		const offline: Send = async () => {
+			throw new TypeError('fetch failed');
+		};
+		expect(await purgeEdgeHost(ZONE, 'example.com', 'boot', offline)).toBe('failed');
+		expect(logged).toHaveBeenCalledTimes(2);
 	});
 });

@@ -55,7 +55,8 @@ src/
   routes/api/auth/$.ts    Better Auth handler
   routes/sitemap[.]xml.ts sitemap of PUBLIC_PAGES; robots[.]txt.ts announces it
   lib/http-headers.ts     security + cache headers set by src/server.ts (PUBLIC_PAGES edge-cached)
-  lib/server/edge-cache.ts Cloudflare purge after each production boot (server/plugins/)
+  lib/server/edge-cache.ts Cloudflare purge by hostname, planned by deployment-purge.ts (server/plugins/)
+  lib/chunk-reload.ts     one reload when a hashed file or a server function of an older build is asked for
   lib/auth.ts             Better Auth server config (Resend e-mails, Turnstile captcha)
   lib/db/                 Drizzle schema + postgres-js client
   lib/server/env.ts       the only process.env reader (zod-validated)
