@@ -41,7 +41,7 @@ const hideUnexpectedErrors = createMiddleware({ type: 'function' }).server(async
 });
 
 export const startInstance = createStart(() => ({
-	requestMiddleware: [limitServerFunctionBody, csrfMiddleware, answerMissingServerFunction],
+	requestMiddleware: [csrfMiddleware, limitServerFunctionBody, answerMissingServerFunction],
 	functionMiddleware: [reloadOnMissingServerFunction, hideUnexpectedErrors],
 }));
 
