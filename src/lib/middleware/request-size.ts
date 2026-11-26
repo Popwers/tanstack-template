@@ -1,7 +1,5 @@
 import { createMiddleware } from '@tanstack/react-start';
 
-const serverFunctionPrefix = '/_serverFn/';
-
 /**
  * Every body a server function takes here (JSON, urlencoded): the largest legitimate one is a few text
  * fields, well under this.
@@ -40,11 +38,12 @@ export function refuseServerFunctionBody(
 }
 
 /**
- * A server-function call with a body is refused on its declared length (413 above the cap), or for
+ * A server-function call (`handlerType`, which Start decides on its own normalised path, so no spelling of
+ * the path skips the check) with a body is refused on its declared length (413 above the cap), or for
  * declaring none (411), before its body is read. Browsers always send the length of what they post.
  */
-export const limitServerFunctionBody = createMiddleware().server(async ({ request, next }) => {
-	if (!new URL(request.url).pathname.startsWith(serverFunctionPrefix)) {
+export const limitServerFunctionBody = createMiddleware().server(async ({ request, handlerType, next }) => {
+	if (handlerType !== 'serverFn') {
 		return next();
 	}
 	const status = refuseServerFunctionBody(

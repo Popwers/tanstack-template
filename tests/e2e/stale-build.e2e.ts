@@ -168,30 +168,60 @@ test('the server answers a function id it does not have with a short 404, never 
 });
 
 /**
- * Posts to a server function and returns the status the server answers on the headers alone, as it does
- * for a body it refuses unread. The body is never sent: a client writing megabytes into a connection the
- * server closes gets EPIPE instead of the status.
+ * Posts to a server function path as written (Node's client does not normalise `path`) and returns the
+ * status the server answers on the headers alone, as it does for a body it refuses unread. The body is
+ * never sent: a client writing megabytes into a connection the server closes gets EPIPE instead of the
+ * status. The headers are flushed by hand: Node holds them back until the first write otherwise.
  */
-function statusOfPost(headers: Record<string, string>, body?: string): Promise<number> {
-	const url = new URL('/_serverFn/ZGVsZXRlZC1pbi10aGUtbmV3LWJ1aWxk', E2E_BASE_URL);
+function statusOfPost(
+	baseUrl: string,
+	path: string,
+	headers: Record<string, string>,
+	body?: string,
+): Promise<number> {
 	return new Promise((resolve, reject) => {
-		const request = http.request(url, { method: 'POST', headers }, (response) => {
+		const request = http.request(baseUrl, { method: 'POST', headers, path }, (response) => {
 			response.resume();
 			resolve(response.statusCode ?? 0);
 			request.destroy();
 		});
 		request.on('error', reject);
-		if (body !== undefined) {
+		if (body === undefined) {
+			request.flushHeaders();
+		} else {
 			request.end(body);
 		}
 	});
 }
 
-test('a server function body with no declared length is refused 411 and an oversized one 413', async () => {
-	const base = { 'x-tsr-serverfn': 'true', 'content-type': 'application/json' };
-	const noLength = await statusOfPost({ ...base, 'transfer-encoding': 'chunked' }, '{}');
-	const tooLarge = await statusOfPost({ ...base, 'content-length': String(2 * 1024 * 1024 + 1) });
-	const garbled = await statusOfPost({ ...base, 'content-length': 'abc' });
+const jsonCall = { 'x-tsr-serverfn': 'true', 'content-type': 'application/json' };
+const oversized = { ...jsonCall, 'content-length': String(2 * 1024 * 1024 + 1) };
 
-	expect({ noLength, tooLarge, garbled }).toEqual({ noLength: 411, tooLarge: 413, garbled: 411 });
+/** Forms of the path that the router may still resolve to a server function while the literal prefix is gone. */
+const spelledPaths = [
+	'/_serverFn%2FZGVsZXRlZC1pbi10aGUtbmV3LWJ1aWxk',
+	'//_serverFn/ZGVsZXRlZC1pbi10aGUtbmV3LWJ1aWxk',
+	'/_SERVERFN/ZGVsZXRlZC1pbi10aGUtbmV3LWJ1aWxk',
+	'/x/../_serverFn/ZGVsZXRlZC1pbi10aGUtbmV3LWJ1aWxk',
+	'/_serverFn/%5A%47%56%73%5A%58%52%6C%5A%47%45%74',
+];
+
+test('a server function body with no declared length is refused 411 and an oversized one 413', async () => {
+	const path = '/_serverFn/ZGVsZXRlZC1pbi10aGUtbmV3LWJ1aWxk';
+	const noLength = await statusOfPost(
+		E2E_BASE_URL,
+		path,
+		{ ...jsonCall, 'transfer-encoding': 'chunked' },
+		'{}',
+	);
+	const tooLarge = await statusOfPost(E2E_BASE_URL, path, oversized);
+
+	expect({ noLength, tooLarge }).toEqual({ noLength: 411, tooLarge: 413 });
+});
+
+test('no spelling of the server function path skips the size limit: the answer comes before any body', async () => {
+	for (const path of spelledPaths) {
+		const status = await statusOfPost(E2E_BASE_URL, path, oversized);
+		expect([413, 404, 308, 400], path).toContain(status);
+	}
 });

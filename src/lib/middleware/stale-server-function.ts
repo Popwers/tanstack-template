@@ -6,18 +6,13 @@ import {
 	reloadNow,
 } from '#/lib/chunk-reload';
 
-const serverFunctionPrefix = '/_serverFn/';
-
 /**
  * Whether a server-function request failed because its id is unknown to this build.
- * @param pathname - The request path.
  * @param error - What the pipeline threw (Start throws `Server function info not found for <id>`).
  * @returns `true` for a stale tab calling a function a newer build removed or renamed.
  */
-export function isMissingServerFunction(pathname: string, error: Error): boolean {
-	return (
-		pathname.startsWith(serverFunctionPrefix) && error.message.startsWith(MISSING_SERVER_FUNCTION_MESSAGE)
-	);
+export function isMissingServerFunction(error: Error): boolean {
+	return error.message.startsWith(MISSING_SERVER_FUNCTION_MESSAGE);
 }
 
 /**
@@ -25,11 +20,11 @@ export function isMissingServerFunction(pathname: string, error: Error): boolean
  * server fault: it answers 404 with a short text instead of letting the error reach the log and Sentry,
  * and the tab reloads (`reloadOnMissingServerFunction`). The id is not echoed.
  */
-export const answerMissingServerFunction = createMiddleware().server(async ({ request, next }) => {
+export const answerMissingServerFunction = createMiddleware().server(async ({ handlerType, next }) => {
 	try {
 		return await next();
 	} catch (error) {
-		if (error instanceof Error && isMissingServerFunction(new URL(request.url).pathname, error)) {
+		if (handlerType === 'serverFn' && error instanceof Error && isMissingServerFunction(error)) {
 			return new Response(MISSING_SERVER_FUNCTION_MESSAGE, {
 				status: 404,
 				headers: { 'content-type': 'text/plain; charset=utf-8' },
