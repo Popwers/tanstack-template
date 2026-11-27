@@ -365,3 +365,20 @@ describe('isNavigationInFlight', () => {
 		expect(isNavigationInFlight()).toBe(false);
 	});
 });
+
+describe('isPageReloading', () => {
+	it('is false until a reload starts, true after, and stays false when the reload is refused', async () => {
+		const { fake } = stubWindow('https://example.com/a');
+		const refused = await freshModule();
+		fake.sessionStorage.setItem(refused.RELOAD_STORAGE_KEY, String(Date.now()));
+		expect(refused.isPageReloading()).toBe(false);
+		refused.reloadNow();
+		expect(refused.isPageReloading()).toBe(false);
+
+		stubWindow('https://example.com/a');
+		const started = await freshModule();
+		expect(started.isPageReloading()).toBe(false);
+		started.reloadNow();
+		expect(started.isPageReloading()).toBe(true);
+	});
+});

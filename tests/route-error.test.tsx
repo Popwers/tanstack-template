@@ -7,7 +7,7 @@ import {
 	RouterProvider,
 } from '@tanstack/react-router';
 import { renderToString } from 'react-dom/server';
-import { describe, expect, it } from 'vite-plus/test';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 
 import { RouteError } from '#/components/route-error';
 
@@ -40,7 +40,44 @@ async function renderFailingPage(): Promise<string> {
 	return renderToString(<RouterProvider router={router} />);
 }
 
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
+
 describe('RouteError', () => {
+	it('renders nothing while the page is reloading: the error screen would only flash', async () => {
+		vi.resetModules();
+		vi.stubGlobal('window', {
+			location: {
+				href: 'https://example.com/boom',
+				origin: 'https://example.com',
+				replace: () => undefined,
+			},
+			sessionStorage: { getItem: () => null, setItem: () => undefined },
+		});
+		const { reloadNow } = await import('#/lib/chunk-reload');
+		const { RouteError: Reloading } = await import('#/components/route-error');
+		expect(reloadNow()).toBe(true);
+
+		const root = createRootRoute({ component: Outlet });
+		const boom = createRoute({
+			getParentRoute: () => root,
+			path: '/boom',
+			loader: () => {
+				throw new TypeError("Cannot read properties of undefined (reading 'component')");
+			},
+			component: () => <p>never rendered</p>,
+		});
+		const router = createRouter({
+			routeTree: root.addChildren([boom]),
+			history: createMemoryHistory({ initialEntries: ['/boom'] }),
+			defaultErrorComponent: Reloading,
+		});
+		await router.load();
+
+		expect(renderToString(<RouterProvider router={router} />)).not.toContain('Une erreur est survenue');
+	});
+
 	it('shows the friendly screen and never the thrown error', async () => {
 		const html = await renderFailingPage();
 		expect(html).toContain('Une erreur est survenue');

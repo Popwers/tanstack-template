@@ -175,6 +175,16 @@ function browserEnvironment(): ReloadEnvironment {
 let isReloading = false;
 
 /**
+ * Whether this page has started its reload and is leaving. The error screen and every error report stay
+ * quiet then: the router throws a TypeError for the file whose failure was cancelled, and it only
+ * matters for the few hundred milliseconds before the fresh page arrives.
+ * @returns `true` once {@link reloadNow} started a reload.
+ */
+export function isPageReloading(): boolean {
+	return isReloading;
+}
+
+/**
  * Start the reload, or confirm it is already under way. A second failure in the dying page (the click
  * after a hover preload, the router's own plain reload) must not replace the navigation to the fresh
  * address: the latest navigation wins.

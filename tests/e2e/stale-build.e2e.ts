@@ -36,6 +36,22 @@ async function forgetEarlierReloads(browser: Browser): Promise<void> {
 	});
 }
 
+/**
+ * Records in session storage (which survives the reload) whether the error screen was ever on the page:
+ * a continuous observation, so the flash between the click and the new page cannot slip between two reads.
+ */
+async function watchForErrorScreen(browser: Browser): Promise<void> {
+	await browser.evaluate(() => {
+		sessionStorage.removeItem('error-screen-seen');
+		new MutationObserver(() => {
+			if (document.body.textContent?.includes('Une erreur est survenue') === true) {
+				sessionStorage.setItem('error-screen-seen', '1');
+			}
+		}).observe(document.body, { childList: true, subtree: true, characterData: true });
+		return true;
+	});
+}
+
 /** Waits until React has hydrated the page: a click before it follows the link as a plain navigation. */
 async function waitUntilHydrated(browser: Browser): Promise<void> {
 	await expect
@@ -70,6 +86,8 @@ test('a file that fails to load reloads the page once, to an address the edge ha
 	await waitUntilHydrated(browser);
 	await forgetEarlierReloads(browser);
 
+	await watchForErrorScreen(browser);
+
 	await screen.getByRole('link', 'Se connecter').tap();
 
 	await expect.poll(() => reloads.length).toBe(1);
@@ -77,6 +95,7 @@ test('a file that fails to load reloads the page once, to an address the edge ha
 	await expect(screen.getByRole('textbox', 'E-mail')).toBeVisible();
 	await expect(screen.getByText('Une erreur est survenue')).toHaveCount(0);
 	expect(reloads).toHaveLength(1);
+	expect(await browser.evaluate(() => sessionStorage.getItem('error-screen-seen'))).toBeNull();
 });
 
 test('a failed hover preload does not reload the page: the typed text stays', async ({
