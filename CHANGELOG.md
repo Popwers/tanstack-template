@@ -1,3 +1,10 @@
+## [1.3.5](https://github.com/Popwers/tanstack-template/compare/v1.3.4...v1.3.5) (2026-11-27)
+
+
+### Bug Fixes
+
+* recover a stale entry script and close the deploy-safety gaps ([#14](https://github.com/Popwers/tanstack-template/issues/14)) ([529829e](https://github.com/Popwers/tanstack-template/commit/529829e1ab8fc64b604a2d26b019375082c6c242))
+
 ## [1.3.4](https://github.com/Popwers/tanstack-template/compare/v1.3.3...v1.3.4) (2026-11-27)
 
 
