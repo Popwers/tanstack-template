@@ -447,6 +447,46 @@ describe('the stale-build notice', () => {
 		expect(changes).toHaveBeenCalledTimes(2);
 	});
 
+	it('gives focus back to the field typed in, skipping a focus-trap guard and the notice itself', async () => {
+		/** An element that knows which selectors its ancestors match, and records being focused. */
+		class FakeElement {
+			isConnected = true;
+			focus = vi.fn();
+			constructor(private readonly matches: string[]) {}
+			closest(selector: string): FakeElement | null {
+				return this.matches.includes(selector) ? this : null;
+			}
+		}
+		const body = new FakeElement([]);
+		const field = new FakeElement([]);
+		const guard = new FakeElement(['[aria-hidden="true"]']);
+		const closeButton = new FakeElement(['[data-stale-build-notice]']);
+		const focusListeners = new Set<(event: { target: FakeElement }) => void>();
+		const fakeDocument = {
+			body,
+			activeElement: field,
+			addEventListener: (_type: string, listener: (event: { target: FakeElement }) => void) =>
+				void focusListeners.add(listener),
+			removeEventListener: (_type: string, listener: (event: { target: FakeElement }) => void) =>
+				void focusListeners.delete(listener),
+		};
+		vi.stubGlobal('HTMLElement', FakeElement);
+		vi.stubGlobal('document', fakeDocument);
+		stubWindow('https://example.com/form');
+		const { announceStaleBuild, dismissStaleBuildNotice, setStaleBuildNotifier } = await freshModule();
+		setStaleBuildNotifier(() => undefined);
+		announceStaleBuild('save');
+
+		for (const target of [guard, closeButton]) {
+			fakeDocument.activeElement = target;
+			for (const listener of focusListeners) listener({ target });
+		}
+		dismissStaleBuildNotice();
+
+		expect(field.focus).toHaveBeenCalledWith({ preventScroll: true });
+		expect(guard.focus).not.toHaveBeenCalled();
+	});
+
 	it('counts a StaleBuildError as coming from an older build, so a loader that hit it reloads', async () => {
 		const { isStaleBuildError, StaleBuildError } = await freshModule();
 		expect(isStaleBuildError(new StaleBuildError())).toBe(true);

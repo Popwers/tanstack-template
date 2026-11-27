@@ -119,9 +119,18 @@ export const NOTICE_SELECTOR = '[data-stale-build-notice]';
 /** The element that had focus before it entered the notice. */
 let focusBeforeNotice: HTMLElement | undefined;
 
+/**
+ * Whether focus landed on a stop of a modal's focus trap: an invisible element hidden from assistive
+ * technology that hands focus on at once, never a place to give focus back to.
+ */
+function isFocusGuard(element: HTMLElement): boolean {
+	return element.closest('[aria-hidden="true"]') !== null;
+}
+
 function onFocusIn(event: FocusEvent): void {
-	if (event.target instanceof HTMLElement && event.target.closest(NOTICE_SELECTOR) === null) {
-		focusBeforeNotice = event.target;
+	const { target } = event;
+	if (target instanceof HTMLElement && target.closest(NOTICE_SELECTOR) === null && !isFocusGuard(target)) {
+		focusBeforeNotice = target;
 	}
 }
 
