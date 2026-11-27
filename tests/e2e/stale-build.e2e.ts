@@ -16,6 +16,7 @@ import { E2E_BASE_URL } from './isolation';
 
 const signInChunk = /\/assets\/sign-in-[\w-]+\.js$/;
 const signUpChunk = /\/assets\/sign-up-[\w-]+\.js$/;
+const entryScript = /\/assets\/index-[\w-]+\.js$/;
 const serverFunctions = /\/_serverFn\//;
 const reloadedAddress = /[?&]_r=\d+/;
 const missingFunction = 'Server function info not found';
@@ -166,23 +167,110 @@ test('a stale read made by a hover preload keeps the typed text and shows the no
 		() => document.querySelector<HTMLInputElement>('input[name=email]')?.value ?? null,
 	);
 	expect(typed).toBe('ada@example.test');
-	const elementOverSubmit = await browser.evaluate(() => {
+	const overSubmit = await browser.evaluate(() => {
 		const submit = document.querySelector<HTMLButtonElement>('form button[type=submit]');
-		if (submit === null) return 'no submit button';
-		submit.scrollIntoView({ block: 'center' });
-		const box = submit.getBoundingClientRect();
-		const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
-		return hit?.closest('[role=alert]') === null ? 'not the notice' : 'the notice';
+		const notice = document.querySelector<HTMLElement>('[role=alert]');
+		if (submit === null || notice === null) return 'no submit button or no notice';
+		const hitWhenScrolledTo = (block: ScrollLogicalPosition) => {
+			submit.scrollIntoView({ block });
+			const box = submit.getBoundingClientRect();
+			const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+			return hit?.closest('[role=alert]') === null ? 'not the notice' : 'the notice';
+		};
+		return {
+			start: hitWhenScrolledTo('start'),
+			end: hitWhenScrolledTo('end'),
+			isHeightReserved:
+				Number.parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) >=
+				notice.getBoundingClientRect().height,
+		};
 	});
-	expect(elementOverSubmit, 'the notice over the form’s submit button, at 375 px').toBe('not the notice');
+	expect(overSubmit, 'the notice over the form’s submit button, at 375 px').toEqual({
+		start: 'not the notice',
+		end: 'not the notice',
+		isHeightReserved: true,
+	});
 
 	await screen.getByRole('button', 'Fermer').tap();
 	await expect(screen.getByRole('button', 'Recharger')).toHaveCount(0);
+	const focused = await browser.evaluate(() => document.activeElement?.getAttribute('name') ?? null);
+	expect(focused, 'focus back on the field the visitor was typing in').toBe('email');
+	expect(await browser.evaluate(() => getComputedStyle(document.documentElement).scrollPaddingTop)).toBe(
+		'0px',
+	);
 
 	await screen.getByRole('link', 'Mon espace').tap();
 
 	await expect.poll(() => reloads.length).toBe(1);
 	expect(reloads[0]).toContain('/dashboard');
+});
+
+test('an entry script the server no longer has reloads the page once, and the fresh page runs', async ({
+	app,
+	screen,
+	browser,
+}) => {
+	await app.open('/');
+	await forgetEarlierReloads(browser);
+	const reloads: string[] = [];
+	await browser.route(reloadedAddress, async (route) => {
+		reloads.push(route.request.url);
+		await route.fallback();
+	});
+	await browser.route(entryScript, async (route) => {
+		if (reloads.length === 0) {
+			await route.fulfill({ status: 404, body: 'Not Found' });
+			return;
+		}
+		await route.fallback();
+	});
+	await app.open('/sign-in');
+
+	await expect.poll(() => reloads.length).toBe(1);
+	await waitUntilHydrated(browser);
+	await expect(browser).toHaveURL(/\/sign-in$/);
+	await expect(screen.getByRole('textbox', 'E-mail')).toBeVisible();
+	expect(reloads).toHaveLength(1);
+});
+
+test('an entry script still missing after that reload is not reloaded again, and the bundle shares its cooldown', async ({
+	app,
+	screen,
+	browser,
+}) => {
+	await app.open('/');
+	await forgetEarlierReloads(browser);
+	const reloads: string[] = [];
+	await browser.route(reloadedAddress, async (route) => {
+		reloads.push(route.request.url);
+		await route.fallback();
+	});
+	let isEntryGone = true;
+	await browser.route(entryScript, async (route) => {
+		if (isEntryGone) {
+			await route.fulfill({ status: 404, body: 'Not Found' });
+			return;
+		}
+		await route.fallback();
+	});
+	await app.open('/sign-in');
+
+	await expect.poll(() => reloads.length).toBe(1);
+	await expect
+		.poll(() => browser.evaluate(() => `${document.readyState} ${location.search.includes('_r=')}`))
+		.toBe('complete true');
+	expect(reloads).toHaveLength(1);
+
+	isEntryGone = false;
+	await browser.route(signUpChunk, async (route) => {
+		await route.abort();
+	});
+	await app.open('/sign-in');
+	await waitUntilHydrated(browser);
+	await screen.getByRole('link', 'Créer un compte').tap();
+
+	await expect(screen.getByRole('heading', 'Une erreur est survenue')).toBeVisible();
+	expect(reloads).toHaveLength(1);
 });
 
 test('a file still missing after a reload is not reloaded again: the error screen stays', async ({

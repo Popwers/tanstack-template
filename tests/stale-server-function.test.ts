@@ -1,6 +1,7 @@
 import type { AnyFunctionMiddleware } from '@tanstack/react-start';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 
+import type { StaleBuildNotifier } from '#/lib/chunk-reload';
 import { isMissingServerFunction } from '#/lib/middleware/stale-server-function';
 
 /**
@@ -91,7 +92,7 @@ describe('reloadOnMissingServerFunction', () => {
 		vi.useFakeTimers();
 		stubWindow();
 		const { chunk, handle } = await freshClient(true);
-		const show = vi.fn<(message: string, reload: () => void, onDismiss: () => void) => void>();
+		const show = vi.fn<StaleBuildNotifier>();
 		chunk.setStaleBuildNotifier(show);
 		const outcome = handle({ method: 'GET', next: missing }).then(
 			() => 'settled',
@@ -109,7 +110,7 @@ describe('reloadOnMissingServerFunction', () => {
 	it('does not reload a stale read made outside a navigation: it rejects and shows the read notice once', async () => {
 		const { replace } = stubWindow();
 		const { chunk, handle } = await freshClient(false);
-		const show = vi.fn<(message: string, reload: () => void) => void>();
+		const show = vi.fn<StaleBuildNotifier>();
 		chunk.setStaleBuildNotifier(show);
 
 		await expect(handle({ method: 'GET', next: missing })).rejects.toBeInstanceOf(chunk.StaleBuildError);
@@ -122,7 +123,7 @@ describe('reloadOnMissingServerFunction', () => {
 	it('shows one notice for ten parallel stale reads', async () => {
 		stubWindow();
 		const { chunk, handle } = await freshClient(false);
-		const show = vi.fn<(message: string, reload: () => void) => void>();
+		const show = vi.fn<StaleBuildNotifier>();
 		chunk.setStaleBuildNotifier(show);
 
 		const calls = Array.from({ length: 10 }, () => handle({ method: 'GET', next: missing }));
@@ -135,7 +136,7 @@ describe('reloadOnMissingServerFunction', () => {
 	it('does not reload a stale save: it rejects with StaleBuildError and shows the notice once', async () => {
 		const { replace } = stubWindow();
 		const { chunk, handle } = await freshClient();
-		const show = vi.fn<(message: string, reload: () => void) => void>();
+		const show = vi.fn<StaleBuildNotifier>();
 		chunk.setStaleBuildNotifier(show);
 
 		await expect(handle({ method: 'POST', next: missing })).rejects.toBeInstanceOf(chunk.StaleBuildError);
@@ -170,7 +171,7 @@ describe('reloadOnMissingServerFunction', () => {
 	it('leaves any other error and any success untouched', async () => {
 		stubWindow();
 		const { chunk, handle } = await freshClient();
-		const show = vi.fn<(message: string, reload: () => void) => void>();
+		const show = vi.fn<StaleBuildNotifier>();
 		chunk.setStaleBuildNotifier(show);
 		const failure = new Error('Une erreur est survenue.');
 
