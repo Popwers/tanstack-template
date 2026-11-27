@@ -211,6 +211,9 @@ export function isPageReloading(): boolean {
  * @returns `true` when this page is reloading.
  */
 export function reloadNow(): boolean {
+	if (!('window' in globalThis)) {
+		return false;
+	}
 	if (isPageReloading()) {
 		return true;
 	}

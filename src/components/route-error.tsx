@@ -17,12 +17,16 @@ import { isPageReloading, reloadForStaleBuild } from '#/lib/chunk-reload';
 export function RouteError({ error, reset }: ErrorComponentProps) {
 	const router = useRouter();
 
-	useEffect(() => {
-		if (isPageReloading() || (error instanceof Error && reloadForStaleBuild(error))) return;
-		void import('@sentry/tanstackstart-react').then((Sentry) => Sentry.captureException(error));
-	}, [error]);
+	// Decided while rendering, so the first paint is already empty when this boundary starts the reload
+	// itself (a flip in an effect would paint the error screen first).
+	const isLeaving = isPageReloading() || (error instanceof Error && reloadForStaleBuild(error));
 
-	if (isPageReloading()) return null;
+	useEffect(() => {
+		if (isLeaving) return;
+		void import('@sentry/tanstackstart-react').then((Sentry) => Sentry.captureException(error));
+	}, [error, isLeaving]);
+
+	if (isLeaving) return null;
 
 	return (
 		<main className='mx-auto max-w-2xl px-4 py-24 text-center'>
