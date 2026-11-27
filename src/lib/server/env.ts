@@ -113,6 +113,19 @@ export function edgeCachePurge(): EdgeCachePurge {
 		: { kind: 'off' };
 }
 
+/**
+ * The origins the app is served on: `APP_URL` and `TRUSTED_ORIGINS`, the same list Better Auth trusts
+ * (`src/lib/auth.ts`). The CSRF check compares a browser's `Origin` with it: behind the proxy the server
+ * sees `http://` while the browser sends `https://`.
+ * @returns Each origin once, without path or trailing slash; an unparsable entry is skipped.
+ */
+export function trustedOrigins(): string[] {
+	const origins = [env().APP_URL, ...env().TRUSTED_ORIGINS].flatMap((value) =>
+		URL.canParse(value) ? [new URL(value).origin] : [],
+	);
+	return [...new Set(origins)];
+}
+
 /** @returns APP_URL without its trailing slash, the origin of every canonical URL. */
 export function appOrigin(): string {
 	return env().APP_URL.replace(/\/+$/, '');
