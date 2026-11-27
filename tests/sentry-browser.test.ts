@@ -52,4 +52,21 @@ describe('beforeSendBrowser', () => {
 
 		expect(sentry.beforeSendBrowser(event)).toEqual(event);
 	});
+
+	it('never reports a StaleBuildError, even after the window ended: the notice already told the visitor', async () => {
+		vi.stubGlobal('window', {
+			location: {
+				href: 'https://example.com/',
+				origin: 'https://example.com',
+				replace: () => undefined,
+			},
+			sessionStorage: { getItem: () => null, setItem: () => undefined },
+		});
+		const { chunk, sentry } = await freshBrowser();
+		const stale = new chunk.StaleBuildError('read');
+		const event = { exception: { values: [{ type: stale.name, value: stale.message }] } };
+
+		expect(sentry.beforeSendBrowser(event)).toBeNull();
+		expect(sentry.beforeSendBrowser({ exception: { values: [{ type: 'TypeError' }] } })).not.toBeNull();
+	});
 });

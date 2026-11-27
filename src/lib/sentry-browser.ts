@@ -1,16 +1,23 @@
-import { isPageReloading } from '#/lib/chunk-reload';
+import { isPageReloading, StaleBuildError } from '#/lib/chunk-reload';
 import { parseTracesSampleRate, scrubEventTokens, sentryOptions, shouldInitSentry } from '#/lib/sentry';
+
+/** The `name` every {@link StaleBuildError} carries, which Sentry reports as the exception's type. */
+const STALE_BUILD_ERROR_NAME = new StaleBuildError().name;
 
 /**
  * `beforeSend` of the browser SDK: nothing is reported while the page is reloading onto a fresh build (the
- * error it still throws on the way out is not a bug), otherwise the shared scrub.
+ * error it still throws on the way out is not a bug), nor ever a `StaleBuildError` (a call refused because
+ * the page is older than the build: the visitor got the notice, no code is at fault); otherwise the shared
+ * scrub.
  * @param event - The event the SDK is about to send.
  * @returns The scrubbed event, or `null` to drop it.
  */
 export function beforeSendBrowser<TEvent extends Parameters<typeof scrubEventTokens>[0]>(
 	event: TEvent,
 ): TEvent | null {
-	return isPageReloading() ? null : scrubEventTokens(event);
+	const isStaleBuild =
+		event.exception?.values?.some((value) => value.type === STALE_BUILD_ERROR_NAME) === true;
+	return isPageReloading() || isStaleBuild ? null : scrubEventTokens(event);
 }
 
 /**

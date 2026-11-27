@@ -1,13 +1,14 @@
 /// <reference types="vite/client" />
 
 import interLatinFont from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url';
-import { createRootRoute, HeadContent, Link, Outlet, Scripts } from '@tanstack/react-router';
+import { createRootRoute, HeadContent, Link, Outlet, Scripts, ScriptOnce } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
 import { Analytics } from '#/components/analytics';
 import { SiteFooter } from '#/components/site-footer';
 import { StaleBuildNotice } from '#/components/stale-build-notice';
 import { SITE } from '#/content/legal/site';
+import { ENTRY_RECOVERY_SCRIPT } from '#/lib/entry-recovery';
 import { PUBLIC_PAGES } from '#/lib/http-headers';
 import { getPublicConfig } from '#/lib/server/session';
 
@@ -98,7 +99,8 @@ function RootLayout() {
 }
 
 /**
- * HTML document shell.
+ * HTML document shell. The entry recovery script comes first in `<head>`, before the stylesheet and the module
+ * preloads it watches.
  * @param props.children - The rendered app.
  * @returns The document.
  */
@@ -106,6 +108,7 @@ function RootDocument({ children }: { children: ReactNode }) {
 	return (
 		<html lang='fr'>
 			<head>
+				<ScriptOnce>{ENTRY_RECOVERY_SCRIPT}</ScriptOnce>
 				<HeadContent />
 			</head>
 			<body>

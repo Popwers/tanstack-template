@@ -11,6 +11,11 @@
 /* Dark mode follows the system setting: no toggle, no script before paint. */
 @custom-variant dark (@media (prefers-color-scheme: dark));
 
+/* The stale-build banner sticks to the top: what is scrolled or tabbed to stops below it (WCAG 2.4.11). */
+html {
+	scroll-padding-top: var(--stale-build-notice-height, 0px);
+}
+
 :root {
 	color-scheme: light dark;
 	--radius: 0.625rem;

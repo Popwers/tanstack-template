@@ -8,6 +8,7 @@ import {
 	RELOAD_PARAM,
 	RELOAD_STORAGE_KEY,
 	type ReloadEnvironment,
+	type StaleBuildNotifier,
 	reloadOnce,
 	withoutReloadParam,
 } from '#/lib/chunk-reload';
@@ -308,7 +309,7 @@ describe('the stale-build notice', () => {
 		const { fake, replace } = stubWindow('https://example.com/form');
 		const { announceStaleBuild, RELOAD_STORAGE_KEY: key, setStaleBuildNotifier } = await freshModule();
 		fake.sessionStorage.setItem(key, String(Date.now()));
-		const show = vi.fn<(message: string, reload: () => void) => void>();
+		const show = vi.fn<StaleBuildNotifier>();
 		setStaleBuildNotifier(show);
 
 		announceStaleBuild('save');
@@ -336,7 +337,7 @@ describe('the stale-build notice', () => {
 	it('shows one notice for ten parallel reads', async () => {
 		stubWindow('https://example.com/');
 		const { announceStaleBuild, setStaleBuildNotifier } = await freshModule();
-		const show = vi.fn<(message: string, reload: () => void, onDismiss: () => void) => void>();
+		const show = vi.fn<StaleBuildNotifier>();
 		setStaleBuildNotifier(show);
 
 		for (let call = 0; call < 10; call += 1) announceStaleBuild('read');
@@ -348,7 +349,7 @@ describe('the stale-build notice', () => {
 		stubWindow('https://example.com/');
 		const { announceStaleBuild, setStaleBuildNotifier, STALE_BUILD_MESSAGE, STALE_BUILD_READ_MESSAGE } =
 			await freshModule();
-		const show = vi.fn<(message: string, reload: () => void, onDismiss: () => void) => void>();
+		const show = vi.fn<StaleBuildNotifier>();
 		setStaleBuildNotifier(show);
 
 		announceStaleBuild('read');
@@ -365,7 +366,7 @@ describe('the stale-build notice', () => {
 	it('shows a refused save again once the previous notice is gone: a failed save is never silent', async () => {
 		stubWindow('https://example.com/');
 		const { announceStaleBuild, setStaleBuildNotifier } = await freshModule();
-		const show = vi.fn<(message: string, reload: () => void, onDismiss: () => void) => void>();
+		const show = vi.fn<StaleBuildNotifier>();
 		setStaleBuildNotifier(show);
 
 		announceStaleBuild('save');
@@ -380,13 +381,110 @@ describe('the stale-build notice', () => {
 	it('does not announce a read while a save notice is on screen', async () => {
 		stubWindow('https://example.com/');
 		const { announceStaleBuild, setStaleBuildNotifier } = await freshModule();
-		const show = vi.fn<(message: string, reload: () => void, onDismiss: () => void) => void>();
+		const show = vi.fn<StaleBuildNotifier>();
 		setStaleBuildNotifier(show);
 
 		announceStaleBuild('save');
 		announceStaleBuild('read');
 
 		expect(show).toHaveBeenCalledTimes(1);
+	});
+
+	it('forgets the notice when the app removes the component that showed it: the next refusal shows again', async () => {
+		stubWindow('https://example.com/');
+		const { announceStaleBuild, setStaleBuildNotifier } = await freshModule();
+		const first = vi.fn<StaleBuildNotifier>();
+		const unregister = setStaleBuildNotifier(first);
+		announceStaleBuild('save');
+
+		unregister();
+		const second = vi.fn<StaleBuildNotifier>();
+		setStaleBuildNotifier(second);
+		announceStaleBuild('save');
+
+		expect(first).toHaveBeenCalledTimes(1);
+		expect(second).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps the notice of a newer registration when an older one is removed', async () => {
+		stubWindow('https://example.com/');
+		const { announceStaleBuild, getStaleBuildNotice, setStaleBuildNotifier } = await freshModule();
+		const unregisterOld = setStaleBuildNotifier(() => undefined);
+		setStaleBuildNotifier(() => undefined);
+		announceStaleBuild('read');
+
+		unregisterOld();
+
+		expect(getStaleBuildNotice()?.kind).toBe('read');
+	});
+
+	it('exposes the notice on screen to every copy of it, and closing one copy closes the app’s own', async () => {
+		stubWindow('https://example.com/');
+		const {
+			announceStaleBuild,
+			dismissStaleBuildNotice,
+			getStaleBuildNotice,
+			setStaleBuildNotifier,
+			STALE_BUILD_MESSAGE,
+			subscribeToStaleBuildNotice,
+		} = await freshModule();
+		const hide = vi.fn();
+		setStaleBuildNotifier(() => hide);
+		const changes = vi.fn();
+		subscribeToStaleBuildNotice(changes);
+		expect(getStaleBuildNotice()).toBeUndefined();
+
+		announceStaleBuild('save');
+		const shown = getStaleBuildNotice();
+		expect(shown).toEqual({ kind: 'save', message: STALE_BUILD_MESSAGE });
+		expect(getStaleBuildNotice()).toBe(shown);
+
+		dismissStaleBuildNotice();
+		dismissStaleBuildNotice();
+
+		expect(getStaleBuildNotice()).toBeUndefined();
+		expect(hide).toHaveBeenCalledTimes(1);
+		expect(changes).toHaveBeenCalledTimes(2);
+	});
+
+	it('gives focus back to the field typed in, skipping a focus-trap guard and the notice itself', async () => {
+		/** An element that knows which selectors its ancestors match, and records being focused. */
+		class FakeElement {
+			isConnected = true;
+			focus = vi.fn();
+			constructor(private readonly matches: string[]) {}
+			closest(selector: string): FakeElement | null {
+				return this.matches.includes(selector) ? this : null;
+			}
+		}
+		const body = new FakeElement([]);
+		const field = new FakeElement([]);
+		const guard = new FakeElement(['[aria-hidden="true"]']);
+		const closeButton = new FakeElement(['[data-stale-build-notice]']);
+		const focusListeners = new Set<(event: { target: FakeElement }) => void>();
+		const fakeDocument = {
+			body,
+			activeElement: field,
+			addEventListener: (_type: string, listener: (event: { target: FakeElement }) => void) =>
+				void focusListeners.add(listener),
+			removeEventListener: (_type: string, listener: (event: { target: FakeElement }) => void) =>
+				void focusListeners.delete(listener),
+		};
+		vi.stubGlobal('HTMLElement', FakeElement);
+		vi.stubGlobal('document', fakeDocument);
+		stubWindow('https://example.com/form');
+		const { announceStaleBuild, dismissStaleBuildNotice, setStaleBuildNotifier } = await freshModule();
+		setStaleBuildNotifier(() => undefined);
+		announceStaleBuild('save');
+
+		for (const target of [guard, closeButton]) {
+			fakeDocument.activeElement = target;
+			for (const listener of focusListeners) listener({ target });
+		}
+		dismissStaleBuildNotice();
+
+		expect(field.focus).toHaveBeenCalledWith({ preventScroll: true });
+		expect(guard.focus).not.toHaveBeenCalled();
 	});
 
 	it('counts a StaleBuildError as coming from an older build, so a loader that hit it reloads', async () => {
@@ -430,6 +528,53 @@ describe('the reloading window', () => {
 		expect(isPageReloading()).toBe(false);
 	});
 
+	it('ends in its own timer, whatever the wall clock says: a parked call is rejected once the page no longer counts as reloading', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+		stubWindow('https://example.com/a');
+		const { isPageReloading, parkUntilReloadEnds, RELOADING_WINDOW_MS, reloadNow } = await freshModule();
+		reloadNow();
+		const reloadingWhenRejected = parkUntilReloadEnds('read').catch(() => isPageReloading());
+
+		vi.advanceTimersByTime(RELOADING_WINDOW_MS);
+
+		expect(isPageReloading()).toBe(false);
+		expect(await reloadingWhenRejected).toBe(false);
+	});
+
+	it('tells its subscribers when it opens and when it ends, so an error screen left empty renders again', async () => {
+		vi.useFakeTimers();
+		stubWindow('https://example.com/a');
+		const { isPageReloading, RELOADING_WINDOW_MS, reloadNow, subscribeToReloadingWindow } =
+			await freshModule();
+		const seen: boolean[] = [];
+		const unsubscribe = subscribeToReloadingWindow(() => seen.push(isPageReloading()));
+		reloadNow();
+		await Promise.resolve();
+
+		vi.advanceTimersByTime(RELOADING_WINDOW_MS);
+		unsubscribe();
+		reloadNow();
+		await Promise.resolve();
+
+		expect(seen).toEqual([true, false]);
+	});
+
+	it('is shared with the inline head script: a reload it started keeps the page quiet for the rest of the window', async () => {
+		vi.useFakeTimers();
+		const { fake } = stubWindow('https://example.com/a');
+		const startedAt = Date.now();
+		Object.assign(fake, { __chunkReload: { startedAt } });
+		const { installChunkReload, isPageReloading, RELOADING_WINDOW_MS, reloadNow } = await freshModule();
+		vi.advanceTimersByTime(4_000);
+
+		installChunkReload(navigating);
+
+		expect(isPageReloading()).toBe(true);
+		expect(reloadNow()).toBe(true);
+		vi.advanceTimersByTime(RELOADING_WINDOW_MS - 4_000);
+		expect(isPageReloading()).toBe(false);
+	});
+
 	it('rejects a parked call with StaleBuildError when the window ends, and shows the notice', async () => {
 		vi.useFakeTimers();
 		stubWindow('https://example.com/a');
@@ -441,7 +586,7 @@ describe('the reloading window', () => {
 			setStaleBuildNotifier,
 			StaleBuildError,
 		} = await freshModule();
-		const show = vi.fn<(message: string, reload: () => void, onDismiss: () => void) => void>();
+		const show = vi.fn<StaleBuildNotifier>();
 		setStaleBuildNotifier(show);
 		reloadNow();
 		const outcome = parkUntilReloadEnds('read').then(
