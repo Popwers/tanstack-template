@@ -12,6 +12,7 @@ async function freshBrowser() {
 }
 
 afterEach(() => {
+	vi.useRealTimers();
 	vi.unstubAllGlobals();
 });
 
@@ -31,5 +32,24 @@ describe('beforeSendBrowser', () => {
 		expect(sentry.beforeSendBrowser(event)).toEqual(event);
 		chunk.reloadNow();
 		expect(sentry.beforeSendBrowser(event)).toBeNull();
+	});
+
+	it('reports again once the reloading window ended without the page leaving', async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal('window', {
+			location: {
+				href: 'https://example.com/',
+				origin: 'https://example.com',
+				replace: () => undefined,
+			},
+			sessionStorage: { getItem: () => null, setItem: () => undefined },
+		});
+		const { chunk, sentry } = await freshBrowser();
+		const event = { message: 'a real error' };
+		chunk.reloadNow();
+
+		vi.advanceTimersByTime(chunk.RELOADING_WINDOW_MS);
+
+		expect(sentry.beforeSendBrowser(event)).toEqual(event);
 	});
 });

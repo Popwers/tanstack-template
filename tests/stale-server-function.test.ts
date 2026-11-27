@@ -64,6 +64,7 @@ function stubWindow() {
 const missing = () => Promise.reject(new Error('Server function info not found'));
 
 afterEach(() => {
+	vi.useRealTimers();
 	vi.unstubAllGlobals();
 });
 
@@ -84,6 +85,25 @@ describe('reloadOnMissingServerFunction', () => {
 
 		expect(outcome).toBe('pending');
 		expect(replace).toHaveBeenCalledTimes(1);
+	});
+
+	it('rejects the parked call with StaleBuildError and shows the notice when the reload window ends', async () => {
+		vi.useFakeTimers();
+		stubWindow();
+		const { chunk, handle } = await freshClient(true);
+		const show = vi.fn<(message: string, reload: () => void, onDismiss: () => void) => void>();
+		chunk.setStaleBuildNotifier(show);
+		const outcome = handle({ method: 'GET', next: missing }).then(
+			() => 'settled',
+			(error: Error) => error,
+		);
+
+		await vi.advanceTimersByTimeAsync(chunk.RELOADING_WINDOW_MS - 1);
+		expect(show).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1);
+
+		expect(await outcome).toBeInstanceOf(chunk.StaleBuildError);
+		expect(show).toHaveBeenCalledTimes(1);
 	});
 
 	it('does not reload a stale read made outside a navigation: it rejects and shows the read notice once', async () => {

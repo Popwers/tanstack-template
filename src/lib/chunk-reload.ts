@@ -76,36 +76,50 @@ export class StaleBuildError extends Error {
 	}
 }
 
-/** Shows the notice; the app registers it once, with its own notification (toast or banner). */
-export type StaleBuildNotifier = (message: string, reload: () => void) => void;
+/**
+ * Shows the notice; the app registers it once, with its own notification (toast or banner). It shows the
+ * message with a « Recharger » action calling `reload`, in one slot (same toast id, same banner): a second
+ * call replaces what is on screen, never stacks. It calls `onDismiss` when the notice leaves the screen
+ * (the visitor closed it, or it timed out).
+ */
+export type StaleBuildNotifier = (message: string, reload: () => void, onDismiss: () => void) => void;
 
 let notifier: StaleBuildNotifier | undefined;
 
 /**
- * Register how the app tells a visitor that a save was refused (`announceStaleBuild`).
- * @param show - Shows the message with a « Recharger » action calling the `reload` it is given.
+ * Register how the app tells a visitor that a call was refused (`announceStaleBuild`).
+ * @param show - Shows the message with a « Recharger » action.
  */
 export function setStaleBuildNotifier(show: StaleBuildNotifier): void {
 	notifier = show;
 }
 
-/** Whether the notice was already raised: one per page life, however many calls fail (parallel reads, a poll). */
-let isAnnounced = false;
+/** The kind of the notice now on screen; `undefined` once it left. */
+let noticeOnScreen: StaleBuildKind | undefined;
 
 /**
- * Tell the visitor that the page is older than the build. The « Recharger » button reloads at once, even
- * within the cooldown: a click is no loop.
+ * Tell the visitor that the page is older than the build. One notice at a time, per kind: ten parallel
+ * reads give one, a save still shows after a read (and replaces it), and a refused save shows again once
+ * the previous notice is gone: a failed save is never silent. The « Recharger » button reloads at once,
+ * even within the cooldown: a click is no loop.
+ * @param kind - A read (GET) or a call that changes data.
  */
 export function announceStaleBuild(kind: StaleBuildKind): void {
-	if (isAnnounced || notifier === undefined) {
+	if (notifier === undefined || noticeOnScreen === 'save' || noticeOnScreen === kind) {
 		return;
 	}
-	isAnnounced = true;
-	notifier(new StaleBuildError(kind).message, () => {
-		const url = new URL(window.location.href);
-		url.searchParams.set(RELOAD_PARAM, String(Date.now()));
-		window.location.replace(url.href);
-	});
+	noticeOnScreen = kind;
+	notifier(
+		new StaleBuildError(kind).message,
+		() => {
+			const url = new URL(window.location.href);
+			url.searchParams.set(RELOAD_PARAM, String(Date.now()));
+			window.location.replace(url.href);
+		},
+		() => {
+			noticeOnScreen = undefined;
+		},
+	);
 }
 
 /** The browser pieces {@link reloadOnce} uses, injectable for tests. */
@@ -171,30 +185,60 @@ function browserEnvironment(): ReloadEnvironment {
 	};
 }
 
-/** Set once this page has started its reload: it is leaving, and nothing else may start a navigation. */
-let isReloading = false;
+/** How long a started reload is given to replace the page: past it, the reload is taken for lost. */
+export const RELOADING_WINDOW_MS = 10_000;
+
+/** When this page started its reload, `undefined` before. */
+let reloadStartedAt: number | undefined;
 
 /**
- * Whether this page has started its reload and is leaving. The error screen and every error report stay
- * quiet then: the router throws a TypeError for the file whose failure was cancelled, and it only
- * matters for the few hundred milliseconds before the fresh page arrives.
- * @returns `true` once {@link reloadNow} started a reload.
+ * Whether this page has started its reload and is about to leave. The error screen and every error report
+ * stay quiet then: the router throws a TypeError for the file whose failure was cancelled, and it only
+ * matters for the few hundred milliseconds before the fresh page arrives. Bounded by
+ * {@link RELOADING_WINDOW_MS}: a reload that does not complete (Stop, Back, a cancelled `beforeunload`
+ * prompt) must not leave the tab silent and blank for the rest of its life.
+ * @returns `true` from the start of a reload until the window ends.
  */
 export function isPageReloading(): boolean {
-	return isReloading;
+	return reloadStartedAt !== undefined && Date.now() - reloadStartedAt < RELOADING_WINDOW_MS;
 }
 
 /**
  * Start the reload, or confirm it is already under way. A second failure in the dying page (the click
  * after a hover preload, the router's own plain reload) must not replace the navigation to the fresh
- * address: the latest navigation wins.
+ * address: the latest navigation wins. After the window the reload is taken for lost: a new attempt
+ * goes through the cooldown, which refuses it.
  * @returns `true` when this page is reloading.
  */
 export function reloadNow(): boolean {
-	if (!isReloading) {
-		isReloading = reloadOnce(browserEnvironment());
+	if (isPageReloading()) {
+		return true;
 	}
-	return isReloading;
+	if (reloadOnce(browserEnvironment())) {
+		reloadStartedAt = Date.now();
+		return true;
+	}
+	return false;
+}
+
+/**
+ * The promise a call is parked on while the page reloads: it never resolves, and rejects with a
+ * {@link StaleBuildError} (and the notice) when the window ends without the page having left, so no caller
+ * stays pending forever.
+ * @param kind - The kind of call that is parked.
+ * @returns A promise that only ever rejects.
+ */
+export function parkUntilReloadEnds(kind: StaleBuildKind): Promise<never> {
+	const remaining = RELOADING_WINDOW_MS - (Date.now() - (reloadStartedAt ?? Date.now()));
+	return new Promise<never>((_, reject) => {
+		setTimeout(
+			() => {
+				announceStaleBuild(kind);
+				reject(new StaleBuildError(kind));
+			},
+			Math.max(remaining, 0),
+		);
+	});
 }
 
 /**

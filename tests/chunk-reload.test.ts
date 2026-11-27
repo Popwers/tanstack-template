@@ -333,14 +333,58 @@ describe('the stale-build notice', () => {
 		expect(STALE_BUILD_MESSAGE).toContain('saisie');
 	});
 
-	it('shows the notice once per page life, whatever the kinds and the number of failing calls', async () => {
+	it('shows one notice for ten parallel reads', async () => {
 		stubWindow('https://example.com/');
 		const { announceStaleBuild, setStaleBuildNotifier } = await freshModule();
-		const show = vi.fn<(message: string, reload: () => void) => void>();
+		const show = vi.fn<(message: string, reload: () => void, onDismiss: () => void) => void>();
 		setStaleBuildNotifier(show);
 
 		for (let call = 0; call < 10; call += 1) announceStaleBuild('read');
+
+		expect(show).toHaveBeenCalledTimes(1);
+	});
+
+	it('shows the save notice after a read notice, in the same slot, and never two of the same kind', async () => {
+		stubWindow('https://example.com/');
+		const { announceStaleBuild, setStaleBuildNotifier, STALE_BUILD_MESSAGE, STALE_BUILD_READ_MESSAGE } =
+			await freshModule();
+		const show = vi.fn<(message: string, reload: () => void, onDismiss: () => void) => void>();
+		setStaleBuildNotifier(show);
+
+		announceStaleBuild('read');
 		announceStaleBuild('save');
+		announceStaleBuild('save');
+		announceStaleBuild('read');
+
+		expect(show.mock.calls.map(([message]) => message)).toEqual([
+			STALE_BUILD_READ_MESSAGE,
+			STALE_BUILD_MESSAGE,
+		]);
+	});
+
+	it('shows a refused save again once the previous notice is gone: a failed save is never silent', async () => {
+		stubWindow('https://example.com/');
+		const { announceStaleBuild, setStaleBuildNotifier } = await freshModule();
+		const show = vi.fn<(message: string, reload: () => void, onDismiss: () => void) => void>();
+		setStaleBuildNotifier(show);
+
+		announceStaleBuild('save');
+		announceStaleBuild('save');
+		expect(show).toHaveBeenCalledTimes(1);
+		show.mock.calls[0]?.[2]();
+		announceStaleBuild('save');
+
+		expect(show).toHaveBeenCalledTimes(2);
+	});
+
+	it('does not announce a read while a save notice is on screen', async () => {
+		stubWindow('https://example.com/');
+		const { announceStaleBuild, setStaleBuildNotifier } = await freshModule();
+		const show = vi.fn<(message: string, reload: () => void, onDismiss: () => void) => void>();
+		setStaleBuildNotifier(show);
+
+		announceStaleBuild('save');
+		announceStaleBuild('read');
 
 		expect(show).toHaveBeenCalledTimes(1);
 	});
@@ -363,6 +407,56 @@ describe('isNavigationInFlight', () => {
 		expect(isNavigationInFlight()).toBe(true);
 		remove();
 		expect(isNavigationInFlight()).toBe(false);
+	});
+});
+
+describe('the reloading window', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('lasts RELOADING_WINDOW_MS, then the tab is taken for not reloading and a new attempt is refused by the cooldown', async () => {
+		vi.useFakeTimers();
+		stubWindow('https://example.com/a');
+		const { isPageReloading, RELOADING_WINDOW_MS, reloadNow } = await freshModule();
+
+		expect(reloadNow()).toBe(true);
+		vi.advanceTimersByTime(RELOADING_WINDOW_MS - 1);
+		expect(isPageReloading()).toBe(true);
+		vi.advanceTimersByTime(1);
+
+		expect(isPageReloading()).toBe(false);
+		expect(reloadNow()).toBe(false);
+		expect(isPageReloading()).toBe(false);
+	});
+
+	it('rejects a parked call with StaleBuildError when the window ends, and shows the notice', async () => {
+		vi.useFakeTimers();
+		stubWindow('https://example.com/a');
+		const {
+			announceStaleBuild,
+			parkUntilReloadEnds,
+			RELOADING_WINDOW_MS,
+			reloadNow,
+			setStaleBuildNotifier,
+			StaleBuildError,
+		} = await freshModule();
+		const show = vi.fn<(message: string, reload: () => void, onDismiss: () => void) => void>();
+		setStaleBuildNotifier(show);
+		reloadNow();
+		const outcome = parkUntilReloadEnds('read').then(
+			() => 'settled',
+			(error: Error) => error,
+		);
+
+		vi.advanceTimersByTime(RELOADING_WINDOW_MS - 1);
+		expect(show).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(1);
+
+		expect(await outcome).toBeInstanceOf(StaleBuildError);
+		expect(show).toHaveBeenCalledTimes(1);
+		announceStaleBuild('read');
+		expect(show).toHaveBeenCalledTimes(1);
 	});
 });
 

@@ -41,6 +41,7 @@ async function renderFailingPage(): Promise<string> {
 }
 
 afterEach(() => {
+	vi.useRealTimers();
 	vi.unstubAllGlobals();
 });
 
@@ -76,6 +77,41 @@ describe('RouteError', () => {
 		await router.load();
 
 		expect(renderToString(<RouterProvider router={router} />)).not.toContain('Une erreur est survenue');
+	});
+
+	it('shows the screen again once the reloading window ended without the page leaving', async () => {
+		vi.useFakeTimers();
+		vi.resetModules();
+		vi.stubGlobal('window', {
+			location: {
+				href: 'https://example.com/boom',
+				origin: 'https://example.com',
+				replace: () => undefined,
+			},
+			sessionStorage: { getItem: () => null, setItem: () => undefined },
+		});
+		const chunk = await import('#/lib/chunk-reload');
+		const { RouteError: Window } = await import('#/components/route-error');
+		chunk.reloadNow();
+		vi.advanceTimersByTime(chunk.RELOADING_WINDOW_MS);
+
+		const root = createRootRoute({ component: Outlet });
+		const boom = createRoute({
+			getParentRoute: () => root,
+			path: '/boom',
+			loader: () => {
+				throw new Error('a real error');
+			},
+			component: () => <p>never rendered</p>,
+		});
+		const router = createRouter({
+			routeTree: root.addChildren([boom]),
+			history: createMemoryHistory({ initialEntries: ['/boom'] }),
+			defaultErrorComponent: Window,
+		});
+		await router.load();
+
+		expect(renderToString(<RouterProvider router={router} />)).toContain('Une erreur est survenue');
 	});
 
 	it('shows the friendly screen and never the thrown error', async () => {

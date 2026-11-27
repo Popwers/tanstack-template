@@ -4,6 +4,7 @@ import {
 	announceStaleBuild,
 	isMissingServerFunctionMessage,
 	isNavigationInFlight,
+	parkUntilReloadEnds,
 	MISSING_SERVER_FUNCTION_MESSAGE,
 	reloadNow,
 	StaleBuildError,
@@ -57,7 +58,7 @@ export const reloadOnMissingServerFunction = createMiddleware({ type: 'function'
 			}
 			if (method === 'GET' && isNavigationInFlight()) {
 				if (reloadNow()) {
-					return new Promise<never>(() => {});
+					return parkUntilReloadEnds('read');
 				}
 				throw error;
 			}
