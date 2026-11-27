@@ -150,6 +150,7 @@ test('a stale read made by a hover preload keeps the typed text and shows the no
 		}
 		await route.fallback();
 	});
+	await browser.setViewport({ width: 375, height: 667 });
 	await app.open('/sign-in');
 	await waitUntilHydrated(browser);
 	await forgetEarlierReloads(browser);
@@ -165,6 +166,17 @@ test('a stale read made by a hover preload keeps the typed text and shows the no
 		() => document.querySelector<HTMLInputElement>('input[name=email]')?.value ?? null,
 	);
 	expect(typed).toBe('ada@example.test');
+	const isSubmitReachable = await browser.evaluate(() => {
+		const submit = document.querySelector<HTMLButtonElement>('form button[type=submit]');
+		if (submit === null) return false;
+		submit.scrollIntoView({ block: 'center' });
+		const box = submit.getBoundingClientRect();
+		return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === submit;
+	});
+	expect(isSubmitReachable, 'the form’s submit button under the notice, at 375 px').toBe(true);
+
+	await screen.getByRole('button', 'Fermer').tap();
+	await expect(screen.getByRole('button', 'Recharger')).toHaveCount(0);
 
 	await screen.getByRole('link', 'Mon espace').tap();
 

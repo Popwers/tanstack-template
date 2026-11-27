@@ -77,6 +77,7 @@ function RootLayout() {
 	const config = Route.useLoaderData();
 	return (
 		<div className='flex min-h-screen flex-col'>
+			<StaleBuildNotice />
 			<header className='border-b px-4 py-3'>
 				<nav className='mx-auto flex max-w-5xl items-center justify-between'>
 					<Link to='/' className='font-semibold'>
@@ -91,7 +92,6 @@ function RootLayout() {
 				<Outlet />
 			</div>
 			<SiteFooter />
-			<StaleBuildNotice />
 			<Analytics clientId={config.openpanelClientId} apiUrl={config.openpanelApiUrl} />
 		</div>
 	);
