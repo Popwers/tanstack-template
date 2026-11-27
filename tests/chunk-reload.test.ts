@@ -311,8 +311,8 @@ describe('the stale-build notice', () => {
 		const show = vi.fn<(message: string, reload: () => void) => void>();
 		setStaleBuildNotifier(show);
 
-		announceStaleBuild();
-		announceStaleBuild();
+		announceStaleBuild('save');
+		announceStaleBuild('read');
 
 		expect(show).toHaveBeenCalledTimes(1);
 		show.mock.calls[0]?.[1]();
@@ -322,11 +322,46 @@ describe('the stale-build notice', () => {
 	it('does nothing, and does not throw, before the app registered a notifier', async () => {
 		stubWindow('https://example.com/');
 		const { announceStaleBuild } = await freshModule();
-		expect(() => announceStaleBuild()).not.toThrow();
+		expect(() => announceStaleBuild('save')).not.toThrow();
+	});
+
+	it('words a read without the sentence about the lost entry, and a save with it', async () => {
+		const { STALE_BUILD_MESSAGE, STALE_BUILD_READ_MESSAGE, StaleBuildError } = await freshModule();
+		expect(new StaleBuildError('read').message).toBe(STALE_BUILD_READ_MESSAGE);
+		expect(new StaleBuildError('save').message).toBe(STALE_BUILD_MESSAGE);
+		expect(STALE_BUILD_READ_MESSAGE).not.toContain('saisie');
+		expect(STALE_BUILD_MESSAGE).toContain('saisie');
+	});
+
+	it('shows the notice once per page life, whatever the kinds and the number of failing calls', async () => {
+		stubWindow('https://example.com/');
+		const { announceStaleBuild, setStaleBuildNotifier } = await freshModule();
+		const show = vi.fn<(message: string, reload: () => void) => void>();
+		setStaleBuildNotifier(show);
+
+		for (let call = 0; call < 10; call += 1) announceStaleBuild('read');
+		announceStaleBuild('save');
+
+		expect(show).toHaveBeenCalledTimes(1);
 	});
 
 	it('counts a StaleBuildError as coming from an older build, so a loader that hit it reloads', async () => {
 		const { isStaleBuildError, StaleBuildError } = await freshModule();
 		expect(isStaleBuildError(new StaleBuildError())).toBe(true);
+	});
+});
+
+describe('isNavigationInFlight', () => {
+	it('follows the predicate the router installed, and is false before and after', async () => {
+		stubWindow('https://example.com/');
+		const { installChunkReload, isNavigationInFlight } = await freshModule();
+		expect(isNavigationInFlight()).toBe(false);
+		let isNavigating = false;
+		const remove = installChunkReload(() => isNavigating);
+		expect(isNavigationInFlight()).toBe(false);
+		isNavigating = true;
+		expect(isNavigationInFlight()).toBe(true);
+		remove();
+		expect(isNavigationInFlight()).toBe(false);
 	});
 });

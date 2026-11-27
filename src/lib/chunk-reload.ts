@@ -57,14 +57,21 @@ export function isStaleBuildError(error: Error): boolean {
 export const STALE_BUILD_MESSAGE =
 	'L’application a été mise à jour. Rechargez la page pour continuer : votre saisie n’a pas été enregistrée.';
 
+/** What a visitor reads when a read made outside a navigation (a hover preload, a refetch) was refused. */
+export const STALE_BUILD_READ_MESSAGE = 'L’application a été mise à jour. Rechargez la page pour continuer.';
+
+/** Which call met the older build: a read (GET) or a call that changes data. */
+export type StaleBuildKind = 'read' | 'save';
+
 /**
- * A call that changes data reached a server function the running build no longer has. The page is not
- * reloaded for it: the typed text would be lost without a word. The caller sees this error, and the app
- * shows a notice with a « Recharger » button (`announceStaleBuild`).
+ * A call reached a server function the running build no longer has, and the page was not reloaded for
+ * it: a save would lose the typed text without a word, a read outside a navigation (a hover preload)
+ * would take a half-typed form away. The caller sees this error, and the app shows a notice with a
+ * « Recharger » button (`announceStaleBuild`).
  */
 export class StaleBuildError extends Error {
-	constructor() {
-		super(STALE_BUILD_MESSAGE);
+	constructor(kind: StaleBuildKind = 'save') {
+		super(kind === 'save' ? STALE_BUILD_MESSAGE : STALE_BUILD_READ_MESSAGE);
 		this.name = 'StaleBuildError';
 	}
 }
@@ -82,19 +89,19 @@ export function setStaleBuildNotifier(show: StaleBuildNotifier): void {
 	notifier = show;
 }
 
-/** Whether the notice is already on screen: one notice per refused save burst, not one per call. */
+/** Whether the notice was already raised: one per page life, however many calls fail (parallel reads, a poll). */
 let isAnnounced = false;
 
 /**
  * Tell the visitor that the page is older than the build. The « Recharger » button reloads at once, even
  * within the cooldown: a click is no loop.
  */
-export function announceStaleBuild(): void {
+export function announceStaleBuild(kind: StaleBuildKind): void {
 	if (isAnnounced || notifier === undefined) {
 		return;
 	}
 	isAnnounced = true;
-	notifier(STALE_BUILD_MESSAGE, () => {
+	notifier(new StaleBuildError(kind).message, () => {
 		const url = new URL(window.location.href);
 		url.searchParams.set(RELOAD_PARAM, String(Date.now()));
 		window.location.replace(url.href);
@@ -191,6 +198,19 @@ export function reloadForStaleBuild(error: Error): boolean {
 
 let removeListeners: (() => void) | undefined;
 
+/** The router's own answer to « is a navigation in flight », set by {@link installChunkReload}. */
+let navigationProbe: (() => boolean) | undefined;
+
+/**
+ * Whether the router is loading a navigation (the predicate given to {@link installChunkReload}). A reload
+ * is only started then: outside one a failure comes from a preload, a refetch or a poll, and the page
+ * holds what the visitor typed.
+ * @returns `false` before the router installed its predicate.
+ */
+export function isNavigationInFlight(): boolean {
+	return navigationProbe?.() === true;
+}
+
 /**
  * Browser start-up: drop the reload query from the address bar, then reload on Vite's
  * `vite:preloadError` (a hashed file that failed to load) and on a dynamic import that rejected
@@ -207,6 +227,7 @@ export function installChunkReload(isNavigating: () => boolean): () => void {
 	if (removeListeners !== undefined) {
 		return removeListeners;
 	}
+	navigationProbe = isNavigating;
 	const cleaned = withoutReloadParam(window.location.href);
 	if (cleaned !== null) {
 		window.history.replaceState(window.history.state, '', cleaned);
@@ -227,6 +248,7 @@ export function installChunkReload(isNavigating: () => boolean): () => void {
 	removeListeners = () => {
 		window.removeEventListener('vite:preloadError', onPreloadError);
 		window.removeEventListener('unhandledrejection', onRejection);
+		navigationProbe = undefined;
 		removeListeners = undefined;
 	};
 	return removeListeners;

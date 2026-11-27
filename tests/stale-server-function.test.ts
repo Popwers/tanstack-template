@@ -35,23 +35,29 @@ function clientHandleOf(middleware: AnyFunctionMiddleware): ClientHandle {
 	return client as never;
 }
 
-async function freshClient() {
+async function freshClient(isNavigating = false) {
 	vi.resetModules();
 	const chunk = await import('#/lib/chunk-reload');
 	const { reloadOnMissingServerFunction } = await import('#/lib/middleware/stale-server-function');
-	return { chunk, handle: clientHandleOf(reloadOnMissingServerFunction) };
+	const state = { isNavigating };
+	chunk.installChunkReload(() => state.isNavigating);
+	return { chunk, state, handle: clientHandleOf(reloadOnMissingServerFunction) };
 }
 
 function stubWindow() {
 	const replace = vi.fn<(url: string) => void>();
 	const store = new Map<string, string>();
-	vi.stubGlobal('window', {
-		location: { href: 'https://example.com/form', origin: 'https://example.com', replace },
-		sessionStorage: {
-			getItem: (key: string) => store.get(key) ?? null,
-			setItem: (key: string, value: string) => void store.set(key, value),
-		},
-	});
+	vi.stubGlobal(
+		'window',
+		Object.assign(new EventTarget(), {
+			location: { href: 'https://example.com/form', origin: 'https://example.com', replace },
+			history: { state: null, replaceState: () => undefined },
+			sessionStorage: {
+				getItem: (key: string) => store.get(key) ?? null,
+				setItem: (key: string, value: string) => void store.set(key, value),
+			},
+		}),
+	);
 	return { replace, store };
 }
 
@@ -67,9 +73,9 @@ afterEach(() => {
  * happened reloads again; an error that is not a stale build is swallowed or rewritten.
  */
 describe('reloadOnMissingServerFunction', () => {
-	it('reloads a stale read once and keeps the call pending', async () => {
+	it('reloads a stale read made during a navigation once, and keeps the call pending', async () => {
 		const { replace } = stubWindow();
-		const { handle } = await freshClient();
+		const { handle } = await freshClient(true);
 
 		const outcome = await Promise.race([
 			handle({ method: 'GET', next: missing }),
@@ -78,6 +84,32 @@ describe('reloadOnMissingServerFunction', () => {
 
 		expect(outcome).toBe('pending');
 		expect(replace).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not reload a stale read made outside a navigation: it rejects and shows the read notice once', async () => {
+		const { replace } = stubWindow();
+		const { chunk, handle } = await freshClient(false);
+		const show = vi.fn<(message: string, reload: () => void) => void>();
+		chunk.setStaleBuildNotifier(show);
+
+		await expect(handle({ method: 'GET', next: missing })).rejects.toBeInstanceOf(chunk.StaleBuildError);
+
+		expect(replace).not.toHaveBeenCalled();
+		expect(show).toHaveBeenCalledTimes(1);
+		expect(show.mock.calls[0]?.[0]).toBe(chunk.STALE_BUILD_READ_MESSAGE);
+	});
+
+	it('shows one notice for ten parallel stale reads', async () => {
+		stubWindow();
+		const { chunk, handle } = await freshClient(false);
+		const show = vi.fn<(message: string, reload: () => void) => void>();
+		chunk.setStaleBuildNotifier(show);
+
+		const calls = Array.from({ length: 10 }, () => handle({ method: 'GET', next: missing }));
+		const outcomes = await Promise.allSettled(calls);
+
+		expect(outcomes.every((outcome) => outcome.status === 'rejected')).toBe(true);
+		expect(show).toHaveBeenCalledTimes(1);
 	});
 
 	it('does not reload a stale save: it rejects with StaleBuildError and shows the notice once', async () => {
@@ -104,9 +136,9 @@ describe('reloadOnMissingServerFunction', () => {
 		expect(replace).not.toHaveBeenCalled();
 	});
 
-	it('hands a stale read to the caller when its reload is refused', async () => {
+	it('hands a stale read made during a navigation to the caller when its reload is refused', async () => {
 		const { replace, store } = stubWindow();
-		const { chunk, handle } = await freshClient();
+		const { chunk, handle } = await freshClient(true);
 		store.set(chunk.RELOAD_STORAGE_KEY, String(Date.now()));
 
 		await expect(handle({ method: 'GET', next: missing })).rejects.toThrow(

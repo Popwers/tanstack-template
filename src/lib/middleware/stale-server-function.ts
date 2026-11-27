@@ -3,6 +3,7 @@ import { createMiddleware } from '@tanstack/react-start';
 import {
 	announceStaleBuild,
 	isMissingServerFunctionMessage,
+	isNavigationInFlight,
 	MISSING_SERVER_FUNCTION_MESSAGE,
 	reloadNow,
 	StaleBuildError,
@@ -37,12 +38,14 @@ export const answerMissingServerFunction = createMiddleware().server(async ({ ha
 });
 
 /**
- * Browser side, on that answer. A read (GET) reloads the page once to a fresh address and stays pending
- * until the page leaves, so no error screen flashes; when the reload is refused (one already happened a
- * moment ago) the error goes on to the caller. Any other call changes data: it is never reloaded away,
- * the visitor's typed text would vanish. It rejects with a `StaleBuildError` and the app shows its
- * notice with a « Recharger » button (`announceStaleBuild`); the form stays on screen. A refused save
- * called from a route loader still reaches the route error boundary, which reloads.
+ * Browser side, on that answer. A read (GET) made during a navigation reloads the page once to a fresh
+ * address and stays pending until the page leaves, so no error screen flashes; when the reload is refused
+ * (one already happened a moment ago) the error goes on to the caller. A read made outside a navigation
+ * (the router preloads on hover, a query refetches) is never reloaded away, the visitor's typed text
+ * would vanish: it rejects with a `StaleBuildError` and the app shows its notice once. The click that
+ * follows fails again inside a navigation, which reloads. Any other call changes data: same, with the
+ * save variant of the notice; the form stays on screen. A refused save called from a route loader still
+ * reaches the route error boundary, which reloads.
  */
 export const reloadOnMissingServerFunction = createMiddleware({ type: 'function' }).client(
 	async ({ method, next }) => {
@@ -52,14 +55,15 @@ export const reloadOnMissingServerFunction = createMiddleware({ type: 'function'
 			if (!(error instanceof Error) || !isMissingServerFunctionMessage(error.message)) {
 				throw error;
 			}
-			if (method !== 'GET') {
-				announceStaleBuild();
-				throw new StaleBuildError();
+			if (method === 'GET' && isNavigationInFlight()) {
+				if (reloadNow()) {
+					return new Promise<never>(() => {});
+				}
+				throw error;
 			}
-			if (reloadNow()) {
-				return new Promise<never>(() => {});
-			}
-			throw error;
+			const kind = method === 'GET' ? 'read' : 'save';
+			announceStaleBuild(kind);
+			throw new StaleBuildError(kind);
 		}
 	},
 );

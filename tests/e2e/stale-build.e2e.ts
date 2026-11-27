@@ -110,6 +110,49 @@ test('a failed hover preload does not reload the page: the typed text stays', as
 	expect(typed).toBe('ada@example.test');
 });
 
+test('a stale read made by a hover preload keeps the typed text and shows the notice; the click then reloads once', async ({
+	app,
+	screen,
+	browser,
+}) => {
+	const reloads: string[] = [];
+	await browser.route(reloadedAddress, async (route) => {
+		reloads.push(route.request.url);
+		await route.fallback();
+	});
+	await browser.route(serverFunctions, async (route) => {
+		if (reloads.length === 0) {
+			await route.fulfill({
+				status: 404,
+				headers: { 'content-type': 'text/plain; charset=utf-8' },
+				body: missingFunction,
+			});
+			return;
+		}
+		await route.fallback();
+	});
+	await app.open('/sign-in');
+	await waitUntilHydrated(browser);
+	await forgetEarlierReloads(browser);
+	await screen.getByRole('textbox', 'E-mail').fill('ada@example.test');
+
+	await screen.getByRole('link', 'Mon espace').hover();
+
+	await expect(screen.getByText(/Rechargez la page pour continuer\./)).toBeVisible();
+	await expect(screen.getByRole('button', 'Recharger')).toBeVisible();
+	expect(reloads).toHaveLength(0);
+	await expect(browser).toHaveURL(/\/sign-in$/);
+	const typed = await browser.evaluate(
+		() => document.querySelector<HTMLInputElement>('input[name=email]')?.value ?? null,
+	);
+	expect(typed).toBe('ada@example.test');
+
+	await screen.getByRole('link', 'Mon espace').tap();
+
+	await expect.poll(() => reloads.length).toBe(1);
+	expect(reloads[0]).toContain('/dashboard');
+});
+
 test('a file still missing after a reload is not reloaded again: the error screen stays', async ({
 	app,
 	screen,
