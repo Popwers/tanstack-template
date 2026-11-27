@@ -93,9 +93,13 @@ export function withoutReloadParam(href: string): string | null {
 	return url.href;
 }
 
-/** Where the visitor is going: the page a navigation in progress opens, else the current one. */
+/**
+ * Where the visitor is going: the page a navigation in progress opens, else the current one. The router's
+ * `latestLocation` follows the history at once, while `state.location` only moves once the navigation has
+ * started loading, which a file that fails fast can beat.
+ */
 function destinationHref(): string {
-	const pending = window.__TSR_ROUTER__?.state.location.href;
+	const pending = window.__TSR_ROUTER__?.latestLocation.href;
 	return pending === undefined ? window.location.href : new URL(pending, window.location.origin).href;
 }
 
