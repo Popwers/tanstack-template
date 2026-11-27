@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 
 import { Analytics } from '#/components/analytics';
 import { SiteFooter } from '#/components/site-footer';
+import { StaleBuildNotice } from '#/components/stale-build-notice';
 import { SITE } from '#/content/legal/site';
 import { PUBLIC_PAGES } from '#/lib/http-headers';
 import { getPublicConfig } from '#/lib/server/session';
@@ -90,6 +91,7 @@ function RootLayout() {
 				<Outlet />
 			</div>
 			<SiteFooter />
+			<StaleBuildNotice />
 			<Analytics clientId={config.openpanelClientId} apiUrl={config.openpanelApiUrl} />
 		</div>
 	);

@@ -46,7 +46,59 @@ export function isMissingServerFunctionMessage(message: string): boolean {
  * @returns `true` for a failed hashed file or a missing server function.
  */
 export function isStaleBuildError(error: Error): boolean {
-	return isChunkLoadMessage(error.message) || isMissingServerFunctionMessage(error.message);
+	return (
+		error instanceof StaleBuildError ||
+		isChunkLoadMessage(error.message) ||
+		isMissingServerFunctionMessage(error.message)
+	);
+}
+
+/** What a visitor reads when a save was refused because the page is older than the running build. */
+export const STALE_BUILD_MESSAGE =
+	'L’application a été mise à jour. Rechargez la page pour continuer : votre saisie n’a pas été enregistrée.';
+
+/**
+ * A call that changes data reached a server function the running build no longer has. The page is not
+ * reloaded for it: the typed text would be lost without a word. The caller sees this error, and the app
+ * shows a notice with a « Recharger » button (`announceStaleBuild`).
+ */
+export class StaleBuildError extends Error {
+	constructor() {
+		super(STALE_BUILD_MESSAGE);
+		this.name = 'StaleBuildError';
+	}
+}
+
+/** Shows the notice; the app registers it once, with its own notification (toast or banner). */
+export type StaleBuildNotifier = (message: string, reload: () => void) => void;
+
+let notifier: StaleBuildNotifier | undefined;
+
+/**
+ * Register how the app tells a visitor that a save was refused (`announceStaleBuild`).
+ * @param show - Shows the message with a « Recharger » action calling the `reload` it is given.
+ */
+export function setStaleBuildNotifier(show: StaleBuildNotifier): void {
+	notifier = show;
+}
+
+/** Whether the notice is already on screen: one notice per refused save burst, not one per call. */
+let isAnnounced = false;
+
+/**
+ * Tell the visitor that the page is older than the build. The « Recharger » button reloads at once, even
+ * within the cooldown: a click is no loop.
+ */
+export function announceStaleBuild(): void {
+	if (isAnnounced || notifier === undefined) {
+		return;
+	}
+	isAnnounced = true;
+	notifier(STALE_BUILD_MESSAGE, () => {
+		const url = new URL(window.location.href);
+		url.searchParams.set(RELOAD_PARAM, String(Date.now()));
+		window.location.replace(url.href);
+	});
 }
 
 /** The browser pieces {@link reloadOnce} uses, injectable for tests. */

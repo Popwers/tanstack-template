@@ -1,9 +1,11 @@
 import { createMiddleware } from '@tanstack/react-start';
 
 import {
+	announceStaleBuild,
 	isMissingServerFunctionMessage,
 	MISSING_SERVER_FUNCTION_MESSAGE,
 	reloadNow,
+	StaleBuildError,
 } from '#/lib/chunk-reload';
 
 /**
@@ -35,16 +37,26 @@ export const answerMissingServerFunction = createMiddleware().server(async ({ ha
 });
 
 /**
- * Browser side: on that answer, reload the page once to a fresh address and keep the call pending until
- * the page leaves, so no error screen or toast flashes. When the reload is refused (one already happened
- * a moment ago) the error goes on to the caller as any other.
+ * Browser side, on that answer. A read (GET) reloads the page once to a fresh address and stays pending
+ * until the page leaves, so no error screen flashes; when the reload is refused (one already happened a
+ * moment ago) the error goes on to the caller. Any other call changes data: it is never reloaded away,
+ * the visitor's typed text would vanish. It rejects with a `StaleBuildError` and the app shows its
+ * notice with a « Recharger » button (`announceStaleBuild`); the form stays on screen. A refused save
+ * called from a route loader still reaches the route error boundary, which reloads.
  */
 export const reloadOnMissingServerFunction = createMiddleware({ type: 'function' }).client(
-	async ({ next }) => {
+	async ({ method, next }) => {
 		try {
 			return await next();
 		} catch (error) {
-			if (error instanceof Error && isMissingServerFunctionMessage(error.message) && reloadNow()) {
+			if (!(error instanceof Error) || !isMissingServerFunctionMessage(error.message)) {
+				throw error;
+			}
+			if (method !== 'GET') {
+				announceStaleBuild();
+				throw new StaleBuildError();
+			}
+			if (reloadNow()) {
 				return new Promise<never>(() => {});
 			}
 			throw error;

@@ -302,3 +302,31 @@ describe('installChunkReload', () => {
 		expect(replace).toHaveBeenCalledTimes(1);
 	});
 });
+
+describe('the stale-build notice', () => {
+	it('is announced once, and its Recharger button reloads even within the cooldown', async () => {
+		const { fake, replace } = stubWindow('https://example.com/form');
+		const { announceStaleBuild, RELOAD_STORAGE_KEY: key, setStaleBuildNotifier } = await freshModule();
+		fake.sessionStorage.setItem(key, String(Date.now()));
+		const show = vi.fn<(message: string, reload: () => void) => void>();
+		setStaleBuildNotifier(show);
+
+		announceStaleBuild();
+		announceStaleBuild();
+
+		expect(show).toHaveBeenCalledTimes(1);
+		show.mock.calls[0]?.[1]();
+		expect(new URL(replace.mock.calls[0]?.[0] ?? '').searchParams.has(RELOAD_PARAM)).toBe(true);
+	});
+
+	it('does nothing, and does not throw, before the app registered a notifier', async () => {
+		stubWindow('https://example.com/');
+		const { announceStaleBuild } = await freshModule();
+		expect(() => announceStaleBuild()).not.toThrow();
+	});
+
+	it('counts a StaleBuildError as coming from an older build, so a loader that hit it reloads', async () => {
+		const { isStaleBuildError, StaleBuildError } = await freshModule();
+		expect(isStaleBuildError(new StaleBuildError())).toBe(true);
+	});
+});
