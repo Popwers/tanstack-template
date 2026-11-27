@@ -12,6 +12,7 @@ gh repo create <org>/<name> --private --template Popwers/tanstack-template --clo
 cd <name>
 make init   # .env with a fresh BETTER_AUTH_SECRET, deps, hooks, Postgres + Mailpit, migrations
 make dev    # http://localhost:3000 — e-mails land in Mailpit at http://localhost:8025
+            # another host (a phone on the LAN, a preview on a plain-http IP): add its origin to TRUSTED_ORIGINS, or server functions answer 403
 ```
 
 Then:
