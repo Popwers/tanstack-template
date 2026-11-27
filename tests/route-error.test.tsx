@@ -7,7 +7,7 @@ import {
 	RouterProvider,
 } from '@tanstack/react-router';
 import { renderToString } from 'react-dom/server';
-import { describe, expect, it } from 'vite-plus/test';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 
 import { RouteError } from '#/components/route-error';
 
@@ -40,7 +40,138 @@ async function renderFailingPage(): Promise<string> {
 	return renderToString(<RouterProvider router={router} />);
 }
 
+afterEach(() => {
+	vi.useRealTimers();
+	vi.unstubAllGlobals();
+});
+
 describe('RouteError', () => {
+	it('renders nothing while the page is reloading: the error screen would only flash', async () => {
+		vi.resetModules();
+		vi.stubGlobal('window', {
+			location: {
+				href: 'https://example.com/boom',
+				origin: 'https://example.com',
+				replace: () => undefined,
+			},
+			sessionStorage: { getItem: () => null, setItem: () => undefined },
+		});
+		const { reloadNow } = await import('#/lib/chunk-reload');
+		const { RouteError: Reloading } = await import('#/components/route-error');
+		expect(reloadNow()).toBe(true);
+
+		const root = createRootRoute({ component: Outlet });
+		const boom = createRoute({
+			getParentRoute: () => root,
+			path: '/boom',
+			loader: () => {
+				throw new TypeError("Cannot read properties of undefined (reading 'component')");
+			},
+			component: () => <p>never rendered</p>,
+		});
+		const router = createRouter({
+			routeTree: root.addChildren([boom]),
+			history: createMemoryHistory({ initialEntries: ['/boom'] }),
+			defaultErrorComponent: Reloading,
+		});
+		await router.load();
+
+		expect(renderToString(<RouterProvider router={router} />)).not.toContain('Une erreur est survenue');
+	});
+
+	it('paints nothing at all when the boundary itself starts the reload: no flash before an effect', async () => {
+		vi.resetModules();
+		const replace = vi.fn<(url: string) => void>();
+		vi.stubGlobal('window', {
+			location: { href: 'https://example.com/boom', origin: 'https://example.com', replace },
+			sessionStorage: { getItem: () => null, setItem: () => undefined },
+		});
+		const { RouteError: Boundary } = await import('#/components/route-error');
+
+		const root = createRootRoute({ component: Outlet });
+		const boom = createRoute({
+			getParentRoute: () => root,
+			path: '/boom',
+			loader: () => {
+				throw new Error('Failed to fetch dynamically imported module: /assets/boom-abc.js');
+			},
+			component: () => <p>never rendered</p>,
+		});
+		const router = createRouter({
+			routeTree: root.addChildren([boom]),
+			history: createMemoryHistory({ initialEntries: ['/boom'] }),
+			defaultErrorComponent: Boundary,
+		});
+		await router.load();
+
+		expect(renderToString(<RouterProvider router={router} />)).not.toContain('Une erreur est survenue');
+		expect(replace).toHaveBeenCalledTimes(1);
+	});
+
+	it('still shows the screen for a stale-build error when the reload is refused', async () => {
+		vi.resetModules();
+		const replace = vi.fn<(url: string) => void>();
+		vi.stubGlobal('window', {
+			location: { href: 'https://example.com/boom', origin: 'https://example.com', replace },
+			sessionStorage: { getItem: () => String(Date.now()), setItem: () => undefined },
+		});
+		const { RouteError: Boundary } = await import('#/components/route-error');
+
+		const root = createRootRoute({ component: Outlet });
+		const boom = createRoute({
+			getParentRoute: () => root,
+			path: '/boom',
+			loader: () => {
+				throw new Error('Failed to fetch dynamically imported module: /assets/boom-abc.js');
+			},
+			component: () => <p>never rendered</p>,
+		});
+		const router = createRouter({
+			routeTree: root.addChildren([boom]),
+			history: createMemoryHistory({ initialEntries: ['/boom'] }),
+			defaultErrorComponent: Boundary,
+		});
+		await router.load();
+
+		expect(renderToString(<RouterProvider router={router} />)).toContain('Une erreur est survenue');
+		expect(replace).not.toHaveBeenCalled();
+	});
+
+	it('shows the screen again once the reloading window ended without the page leaving', async () => {
+		vi.useFakeTimers();
+		vi.resetModules();
+		vi.stubGlobal('window', {
+			location: {
+				href: 'https://example.com/boom',
+				origin: 'https://example.com',
+				replace: () => undefined,
+			},
+			sessionStorage: { getItem: () => null, setItem: () => undefined },
+		});
+		const chunk = await import('#/lib/chunk-reload');
+		const { RouteError: Window } = await import('#/components/route-error');
+		chunk.reloadNow();
+		vi.advanceTimersByTime(chunk.RELOADING_WINDOW_MS);
+
+		const root = createRootRoute({ component: Outlet });
+		const boom = createRoute({
+			getParentRoute: () => root,
+			path: '/boom',
+			loader: () => {
+				throw new Error('a real error');
+			},
+			component: () => <p>never rendered</p>,
+		});
+		const router = createRouter({
+			routeTree: root.addChildren([boom]),
+			history: createMemoryHistory({ initialEntries: ['/boom'] }),
+			defaultErrorComponent: Window,
+		});
+		await router.load();
+
+		expect(renderToString(<RouterProvider router={router} />)).toContain('Une erreur est survenue');
+	});
+
 	it('shows the friendly screen and never the thrown error', async () => {
 		const html = await renderFailingPage();
 		expect(html).toContain('Une erreur est survenue');

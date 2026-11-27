@@ -12,6 +12,7 @@ gh repo create <org>/<name> --private --template Popwers/tanstack-template --clo
 cd <name>
 make init   # .env with a fresh BETTER_AUTH_SECRET, deps, hooks, Postgres + Mailpit, migrations
 make dev    # http://localhost:3000 — e-mails land in Mailpit at http://localhost:8025
+            # another host (a phone on the LAN, a preview on a plain-http IP): add its origin to TRUSTED_ORIGINS, or server functions answer 403
 ```
 
 Then:
@@ -55,7 +56,8 @@ src/
   routes/api/auth/$.ts    Better Auth handler
   routes/sitemap[.]xml.ts sitemap of PUBLIC_PAGES; robots[.]txt.ts announces it
   lib/http-headers.ts     security + cache headers set by src/server.ts (PUBLIC_PAGES edge-cached)
-  lib/server/edge-cache.ts Cloudflare purge after each production boot (server/plugins/)
+  lib/server/edge-cache.ts Cloudflare purge by hostname, planned by deployment-purge.ts (server/plugins/)
+  lib/chunk-reload.ts     one reload when a hashed file or a server function of an older build is asked for
   lib/auth.ts             Better Auth server config (Resend e-mails, Turnstile captcha)
   lib/db/                 Drizzle schema + postgres-js client
   lib/server/env.ts       the only process.env reader (zod-validated)

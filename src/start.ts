@@ -1,14 +1,34 @@
 import { isNotFound, isRedirect } from '@tanstack/react-router';
-import { createCsrfMiddleware, createMiddleware, createStart } from '@tanstack/react-start';
+import {
+	createCsrfMiddleware,
+	createMiddleware,
+	createServerOnlyFn,
+	createStart,
+} from '@tanstack/react-start';
 
+import { limitServerFunctionBody } from '#/lib/middleware/request-size';
+import {
+	answerMissingServerFunction,
+	reloadOnMissingServerFunction,
+} from '#/lib/middleware/stale-server-function';
 import { PublicError } from '#/lib/public-error';
+import { trustedOrigins } from '#/lib/server/env';
 
 /** What the browser gets when a server function fails unexpectedly. */
 const UNEXPECTED_ERROR_MESSAGE = 'Une erreur est survenue. Réessayez dans un instant.';
 
-/** Server functions are same-origin RPC: refuse cross-site calls. API routes keep their own checks. */
+/** Server only: the browser bundle never carries the environment. */
+const isPublicOrigin = createServerOnlyFn((origin: string) => trustedOrigins().includes(origin));
+
+/**
+ * Server functions are same-origin RPC: refuse cross-site calls. API routes keep their own checks. A
+ * browser with no `Sec-Fetch-Site` is judged on its `Origin` (or `Referer`) against the public origins
+ * (`APP_URL`, `TRUSTED_ORIGINS`), not against `request.url`, which is `http://` behind the proxy
+ * (start-client-core `createCsrfMiddleware.ts`, `validateCsrfRequest`).
+ */
 const csrfMiddleware = createCsrfMiddleware({
 	filter: (ctx) => ctx.handlerType === 'serverFn',
+	origin: (origin) => isPublicOrigin(origin),
 });
 
 /**
@@ -36,8 +56,8 @@ const hideUnexpectedErrors = createMiddleware({ type: 'function' }).server(async
 });
 
 export const startInstance = createStart(() => ({
-	requestMiddleware: [csrfMiddleware],
-	functionMiddleware: [hideUnexpectedErrors],
+	requestMiddleware: [csrfMiddleware, limitServerFunctionBody, answerMissingServerFunction],
+	functionMiddleware: [reloadOnMissingServerFunction, hideUnexpectedErrors],
 }));
 
 declare module '@tanstack/react-start' {

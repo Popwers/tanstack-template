@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 
 import { Analytics } from '#/components/analytics';
 import { SiteFooter } from '#/components/site-footer';
+import { StaleBuildNotice } from '#/components/stale-build-notice';
 import { SITE } from '#/content/legal/site';
 import { PUBLIC_PAGES } from '#/lib/http-headers';
 import { getPublicConfig } from '#/lib/server/session';
@@ -76,6 +77,7 @@ function RootLayout() {
 	const config = Route.useLoaderData();
 	return (
 		<div className='flex min-h-screen flex-col'>
+			<StaleBuildNotice />
 			<header className='border-b px-4 py-3'>
 				<nav className='mx-auto flex max-w-5xl items-center justify-between'>
 					<Link to='/' className='font-semibold'>

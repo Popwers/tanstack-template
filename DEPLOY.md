@@ -36,7 +36,7 @@ injecte chaque variable *Buildtime* en `ARG`) : en changer une demande un nouvea
 | `OPENPANEL_API_URL` | non | `https://o.mystudio.digital/api` | OpenPanel self-hosted |
 | `OPENPANEL_CLIENT_ID` | non | | Id client public du projet. Absent : pas d'analytics |
 | `CLOUDFLARE_ZONE_ID` | non | | Zone Cloudflare d'`APP_URL` |
-| `CLOUDFLARE_API_TOKEN` | non | | Token limité à *Zone › Cache Purge* sur cette zone. Avec la zone : chaque démarrage en prod purge les pages publiques, robots.txt et sitemap.xml une fois le nouveau conteneur en service. Absent : pas de purge |
+| `CLOUDFLARE_API_TOKEN` | non | | Token limité à *Zone › Cache Purge* sur cette zone. Avec la zone : chaque démarrage en prod purge tout ce que Cloudflare garde pour le nom d'hôte d'`APP_URL` (pages publiques avec leur query string, robots.txt, sitemap.xml) trois fois : au démarrage, à la première requête passée par Cloudflare (preuve que Coolify a basculé le trafic ; le health check, lui, n'a pas d'en-tête `cf-ray`), et 120 s après le démarrage. Absent : pas de purge, et les pages gardées 5 minutes par Cloudflare nomment alors des fichiers `/assets/` que le nouveau conteneur n'a plus |
 
 Cache Cloudflare : l'app envoie `CDN-Cache-Control` sur les pages publiques (`PUBLIC_PAGES` dans
 `src/lib/http-headers.ts`) pour un visiteur anonyme, et `private, no-store` partout ailleurs. La règle de
@@ -95,6 +95,14 @@ curl -sI https://<domaine>/ | grep -i -E 'cf-cache-status|strict-transport|x-con
 ```
 
 Puis inscription → e-mail reçu → lien → `/dashboard`, et `stack-conformity .` vert sur `main`.
+
+Après chaque déploiement : le journal du conteneur montre `[edge-cache] purged every cached page of <domaine> (boot)`, puis `(first request through Cloudflare)`, puis une troisième ligne environ deux minutes après le démarrage (sans `CLOUDFLARE_*` : `deployment purge off`). Les fichiers que la page d'accueil nomme répondent 200 :
+
+```bash
+curl -s https://<domaine>/ | rg -o '/assets/[^"]+\.js' | sort -u | while read f; do curl -s -o /dev/null -w "%{http_code} $f\n" "https://<domaine>$f"; done
+```
+
+Un onglet resté ouvert sur l'ancien build se recharge une seule fois (`?_r=` retiré de l'adresse ensuite) quand un fichier ou une server function a disparu : `src/lib/chunk-reload.ts`.
 
 ## 6. Tester l'image en local
 

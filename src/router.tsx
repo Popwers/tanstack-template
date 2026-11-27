@@ -2,6 +2,7 @@ import { createRouter } from '@tanstack/react-router';
 import { getGlobalStartContext } from '@tanstack/react-start';
 
 import { RouteError } from '#/components/route-error';
+import { installChunkReload } from '#/lib/chunk-reload';
 
 import { routeTree } from './routeTree.gen';
 
@@ -11,7 +12,11 @@ import { routeTree } from './routeTree.gen';
  * @returns The configured router.
  */
 export function getRouter() {
-	return createRouter({
+	if (!import.meta.env.SSR) {
+		// Before the router reads the address: the reload query is dropped from it first.
+		installChunkReload(() => router.state.status === 'pending');
+	}
+	const router = createRouter({
 		routeTree,
 		scrollRestoration: true,
 		defaultPreload: 'intent',
@@ -19,6 +24,7 @@ export function getRouter() {
 		defaultErrorComponent: RouteError,
 		ssr: { nonce: getGlobalStartContext()?.cspNonce },
 	});
+	return router;
 }
 
 declare module '@tanstack/react-router' {
