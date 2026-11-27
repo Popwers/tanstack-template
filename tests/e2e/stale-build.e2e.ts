@@ -194,7 +194,12 @@ function statusOfPost(
 	});
 }
 
-const jsonCall = { 'x-tsr-serverfn': 'true', 'content-type': 'application/json' };
+/** A same-origin browser call: without `Sec-Fetch-Site` the CSRF middleware, first in the chain, answers 403 before the size guard. */
+const jsonCall = {
+	'x-tsr-serverfn': 'true',
+	'content-type': 'application/json',
+	'sec-fetch-site': 'same-origin',
+};
 const oversized = { ...jsonCall, 'content-length': String(2 * 1024 * 1024 + 1) };
 
 /** Forms of the path that the router may still resolve to a server function while the literal prefix is gone. */
@@ -224,4 +229,18 @@ test('no spelling of the server function path skips the size limit: the answer c
 		const status = await statusOfPost(E2E_BASE_URL, path, oversized);
 		expect([413, 404, 308, 400], path).toContain(status);
 	}
+});
+
+test('a server function call from another site is refused 403 before anything else', async () => {
+	const path = '/_serverFn/ZGVsZXRlZC1pbi10aGUtbmV3LWJ1aWxk';
+	const crossSite = { ...jsonCall, 'sec-fetch-site': 'cross-site' };
+	const foreignOrigin = {
+		'x-tsr-serverfn': 'true',
+		origin: 'https://evil.example',
+	};
+
+	expect({
+		crossSite: await statusOfPost(E2E_BASE_URL, path, crossSite, '{}'),
+		foreignOrigin: await statusOfPost(E2E_BASE_URL, path, foreignOrigin, '{}'),
+	}).toEqual({ crossSite: 403, foreignOrigin: 403 });
 });
