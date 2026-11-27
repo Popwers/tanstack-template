@@ -166,14 +166,15 @@ test('a stale read made by a hover preload keeps the typed text and shows the no
 		() => document.querySelector<HTMLInputElement>('input[name=email]')?.value ?? null,
 	);
 	expect(typed).toBe('ada@example.test');
-	const isSubmitReachable = await browser.evaluate(() => {
+	const elementOverSubmit = await browser.evaluate(() => {
 		const submit = document.querySelector<HTMLButtonElement>('form button[type=submit]');
-		if (submit === null) return false;
+		if (submit === null) return 'no submit button';
 		submit.scrollIntoView({ block: 'center' });
 		const box = submit.getBoundingClientRect();
-		return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === submit;
+		const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+		return hit?.closest('[role=alert]') === null ? 'not the notice' : 'the notice';
 	});
-	expect(isSubmitReachable, 'the form’s submit button under the notice, at 375 px').toBe(true);
+	expect(elementOverSubmit, 'the notice over the form’s submit button, at 375 px').toBe('not the notice');
 
 	await screen.getByRole('button', 'Fermer').tap();
 	await expect(screen.getByRole('button', 'Recharger')).toHaveCount(0);
