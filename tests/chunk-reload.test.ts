@@ -140,6 +140,7 @@ interface FakeWindow extends EventTarget {
 	location: { href: string; origin: string; replace: (url: string) => void };
 	history: { state: null; replaceState: (state: null, title: string, url: string) => void };
 	sessionStorage: Pick<Storage, 'getItem' | 'setItem'>;
+	__TSR_ROUTER__?: { latestLocation: { href: string } };
 }
 
 /** A window for `installChunkReload`: the events it listens to, the address, the history and storage. */
@@ -164,20 +165,24 @@ async function freshModule() {
 	return import('#/lib/chunk-reload');
 }
 
+const navigating = () => true;
+const idle = () => false;
+
 afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
 /**
- * Failure modes of the browser wiring: a failed file does not reload, the reload repeats on the second
- * failure, the router's own default (an error screen) is cancelled when no reload happens or kept when
- * the reload was refused, an unrelated rejection reloads, the query stays in the address bar.
+ * Failure modes of the browser wiring: a failed hover preload reloads the page and takes a half-typed
+ * form with it; a failed file during a navigation does not reload; the reload repeats on the second
+ * failure; the router's own default (an error screen) is cancelled when no reload happens or kept when
+ * the reload was refused; the reload goes to the page being left; the query stays in the address bar.
  */
 describe('installChunkReload', () => {
-	it('reloads once on a failed hashed file and cancels the error screen', async () => {
+	it('reloads once on a failed hashed file during a navigation and cancels the error screen', async () => {
 		const { fake, replace } = stubWindow('https://example.com/dashboard');
 		const { installChunkReload } = await freshModule();
-		installChunkReload();
+		installChunkReload(navigating);
 
 		const first = new Event('vite:preloadError', { cancelable: true });
 		fake.dispatchEvent(first);
@@ -190,11 +195,50 @@ describe('installChunkReload', () => {
 		expect(second.defaultPrevented).toBe(true);
 	});
 
+	it('does nothing for a failed preload while no navigation is in flight', async () => {
+		const { fake, replace } = stubWindow('https://example.com/dashboard');
+		const { installChunkReload } = await freshModule();
+		installChunkReload(idle);
+
+		const failure = new Event('vite:preloadError', { cancelable: true });
+		fake.dispatchEvent(failure);
+		fake.dispatchEvent(
+			Object.assign(new Event('unhandledrejection'), {
+				reason: new Error('Failed to fetch dynamically imported module: /assets/a.js'),
+			}),
+		);
+
+		expect(replace).not.toHaveBeenCalled();
+		expect(failure.defaultPrevented).toBe(false);
+	});
+
+	it('reloads once, onto the clicked page, when the click follows a failed hover preload', async () => {
+		const { fake, replace } = stubWindow('https://example.com/');
+		const { installChunkReload } = await freshModule();
+		let isNavigating = false;
+		installChunkReload(() => isNavigating);
+
+		const hover = new Event('vite:preloadError', { cancelable: true });
+		fake.dispatchEvent(hover);
+		expect(replace).not.toHaveBeenCalled();
+
+		isNavigating = true;
+		fake.__TSR_ROUTER__ = { latestLocation: { href: '/clients?tab=a' } };
+		const click = new Event('vite:preloadError', { cancelable: true });
+		fake.dispatchEvent(click);
+
+		expect(replace).toHaveBeenCalledTimes(1);
+		const target = new URL(replace.mock.calls[0]?.[0] ?? '');
+		expect(target.pathname + target.searchParams.get('tab')).toBe('/clientsa');
+		expect(target.searchParams.has(RELOAD_PARAM)).toBe(true);
+		expect(click.defaultPrevented).toBe(true);
+	});
+
 	it('leaves the error to the router when a reload already failed to help', async () => {
 		const { fake, replace } = stubWindow('https://example.com/dashboard');
 		const { RELOAD_STORAGE_KEY: key, installChunkReload } = await freshModule();
 		fake.sessionStorage.setItem(key, String(Date.now()));
-		installChunkReload();
+		installChunkReload(navigating);
 
 		const failure = new Event('vite:preloadError', { cancelable: true });
 		fake.dispatchEvent(failure);
@@ -209,7 +253,7 @@ describe('installChunkReload', () => {
 		};
 		const { fake, replace } = stubWindow('https://example.com/', { getItem: blocked, setItem: blocked });
 		const { installChunkReload } = await freshModule();
-		installChunkReload();
+		installChunkReload(navigating);
 
 		const failure = new Event('vite:preloadError', { cancelable: true });
 		expect(() => fake.dispatchEvent(failure)).not.toThrow();
@@ -217,10 +261,10 @@ describe('installChunkReload', () => {
 		expect(failure.defaultPrevented).toBe(false);
 	});
 
-	it('reloads on a dynamic import that rejected, not on another rejection', async () => {
+	it('reloads on a dynamic import that rejected during a navigation, not on another rejection', async () => {
 		const { fake, replace } = stubWindow('https://example.com/');
 		const { installChunkReload } = await freshModule();
-		installChunkReload();
+		installChunkReload(navigating);
 
 		fake.dispatchEvent(
 			Object.assign(new Event('unhandledrejection'), { reason: new Error('Failed query') }),
@@ -239,15 +283,15 @@ describe('installChunkReload', () => {
 	it('removes the reload query from the address bar, keeping the rest', async () => {
 		const { replaceState } = stubWindow('https://example.com/a?x=1&_r=1800000000000');
 		const { installChunkReload } = await freshModule();
-		installChunkReload();
+		installChunkReload(navigating);
 		expect(replaceState).toHaveBeenCalledWith(null, '', 'https://example.com/a?x=1');
 	});
 
 	it('leaves an address without the query alone, and installs its listeners once', async () => {
 		const { fake, replace, replaceState } = stubWindow('https://example.com/a?x=1');
 		const { installChunkReload } = await freshModule();
-		const remove = installChunkReload();
-		expect(installChunkReload()).toBe(remove);
+		const remove = installChunkReload(navigating);
+		expect(installChunkReload(navigating)).toBe(remove);
 		expect(replaceState).not.toHaveBeenCalled();
 
 		fake.dispatchEvent(new Event('vite:preloadError', { cancelable: true }));

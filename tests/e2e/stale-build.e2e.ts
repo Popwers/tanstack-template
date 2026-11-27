@@ -15,6 +15,7 @@ import { expect } from 'e2e';
 import { E2E_BASE_URL } from './isolation';
 
 const signInChunk = /\/assets\/sign-in-[\w-]+\.js$/;
+const signUpChunk = /\/assets\/sign-up-[\w-]+\.js$/;
 const serverFunctions = /\/_serverFn\//;
 const reloadedAddress = /[?&]_r=\d+/;
 const missingFunction = 'Server function info not found';
@@ -76,6 +77,37 @@ test('a file that fails to load reloads the page once, to an address the edge ha
 	await expect(screen.getByRole('textbox', 'E-mail')).toBeVisible();
 	await expect(screen.getByText('Une erreur est survenue')).toHaveCount(0);
 	expect(reloads).toHaveLength(1);
+});
+
+test('a failed hover preload does not reload the page: the typed text stays', async ({
+	app,
+	screen,
+	browser,
+}) => {
+	const reloads: string[] = [];
+	const chunkRequests: string[] = [];
+	await browser.route(reloadedAddress, async (route) => {
+		reloads.push(route.request.url);
+		await route.fallback();
+	});
+	await browser.route(signUpChunk, async (route) => {
+		chunkRequests.push(route.request.url);
+		await route.abort();
+	});
+	await app.open('/sign-in');
+	await waitUntilHydrated(browser);
+	await forgetEarlierReloads(browser);
+	await screen.getByRole('textbox', 'E-mail').fill('ada@example.test');
+
+	await screen.getByRole('link', 'Créer un compte').hover();
+
+	await expect.poll(() => chunkRequests.length).toBeGreaterThan(0);
+	expect(reloads).toHaveLength(0);
+	await expect(browser).toHaveURL(/\/sign-in$/);
+	const typed = await browser.evaluate(
+		() => document.querySelector<HTMLInputElement>('input[name=email]')?.value ?? null,
+	);
+	expect(typed).toBe('ada@example.test');
 });
 
 test('a file still missing after a reload is not reloaded again: the error screen stays', async ({

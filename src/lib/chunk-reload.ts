@@ -142,11 +142,16 @@ let removeListeners: (() => void) | undefined;
 /**
  * Browser start-up: drop the reload query from the address bar, then reload on Vite's
  * `vite:preloadError` (a hashed file that failed to load) and on a dynamic import that rejected
- * outside Vite's helper. The event's default action, throwing the error to the error screen, stays
- * when no reload is allowed, and is cancelled once one is under way.
+ * outside Vite's helper, but only while the router has a navigation in flight. The router also preloads
+ * on hover or touch through the same helper: a failed preload must not take a form away from the
+ * visitor, and the click that follows fails again inside a navigation, which reloads onto its
+ * destination. The event's default action, throwing the error to the error screen, stays when no reload
+ * is allowed, and is cancelled once one is under way.
+ * @param isNavigating - Whether the router is loading a navigation (`router.state.status === 'pending'`:
+ * `preloadRoute` never sets it, `load-client.ts` sets it for navigations only).
  * @returns Removes the listeners; a second call before that returns the same remover.
  */
-export function installChunkReload(): () => void {
+export function installChunkReload(isNavigating: () => boolean): () => void {
 	if (removeListeners !== undefined) {
 		return removeListeners;
 	}
@@ -155,13 +160,13 @@ export function installChunkReload(): () => void {
 		window.history.replaceState(window.history.state, '', cleaned);
 	}
 	const onPreloadError = (event: Event) => {
-		if (reloadNow()) {
+		if (isNavigating() && reloadNow()) {
 			event.preventDefault();
 		}
 	};
 	const onRejection = (event: PromiseRejectionEvent) => {
 		const reason = event.reason instanceof Error ? event.reason.message : '';
-		if (isChunkLoadMessage(reason)) {
+		if (isNavigating() && isChunkLoadMessage(reason)) {
 			reloadNow();
 		}
 	};
